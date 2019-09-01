@@ -42,7 +42,6 @@ public class TCPReceiver implements Runnable {
 
 				Event event = EventFactory.getInstance().getEvent(data);
 				server.onEvent(event, socket);
-
 			} catch (IOException ioe) {
 				System.err.println("TCPReceiver: Error while reading from socket");
 				ioe.printStackTrace();

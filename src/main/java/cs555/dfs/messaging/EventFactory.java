@@ -1,5 +1,7 @@
 package cs555.dfs.messaging;
 
+import cs555.dfs.messaging.Event.Type;
+
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -42,14 +44,20 @@ public class EventFactory {
 		DataInputStream din =
 				new DataInputStream(new BufferedInputStream(baInputStream));
 		try {
-			int type = din.readInt();
+			Type type = Type.valueOf(din.readInt());
 			Event e = null;
+			System.out.println(type);
 			switch (type) {
+				case CHUNK_LOCATION_REQUEST:
+					e = new ChunkLocationRequest(din);
+					break;
+				case CHUNK_LOCATION_RESPONSE:
+					e = new ChunkLocationResponse(din);
+					break;
+				default:
+					System.err.println("Event of type " + type + " does not exist.");
+					break;
 
-
-			}
-			if(e == null) {
-				System.err.println("Event of type " + type + " does not exist.");
 			}
 			baInputStream.close();
 			din.close();

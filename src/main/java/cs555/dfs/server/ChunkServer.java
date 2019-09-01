@@ -7,6 +7,11 @@ import java.net.Socket;
 public class ChunkServer implements Server{
 
 
+
+	public ChunkServer() {
+
+	}
+
 	@Override
 	public void onEvent(Event event, Socket socket) {
 

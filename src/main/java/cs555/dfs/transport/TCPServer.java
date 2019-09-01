@@ -56,6 +56,7 @@ public class TCPServer implements Runnable{
 	public void run() {
 		while (true) {
 			try {
+				System.out.println("Waiting for socket");
 				Socket socket = serverSocket.accept();
 				new Thread(new TCPReceiver(socket, server)).start();
 			} catch (IOException ioe) {
