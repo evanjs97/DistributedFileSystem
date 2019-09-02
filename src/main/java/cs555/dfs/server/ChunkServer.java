@@ -23,6 +23,7 @@ public class ChunkServer implements Server{
 
 	private void init() {
 		TCPServer tcpServer = new TCPServer(0, this);
+		System.out.println("ChunkServer: Starting on " + tcpServer.getInetAddress().getHostName()+":"+tcpServer.getLocalPort());
 		register(tcpServer.getInetAddress().getHostName(), tcpServer.getLocalPort());
 		Thread server = new Thread(tcpServer);
 		server.start();

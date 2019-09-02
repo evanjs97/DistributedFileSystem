@@ -1,7 +1,5 @@
 package cs555.dfs.messaging;
 
-import cs555.dfs.util.ChunkUtil;
-
 import java.io.*;
 
 public class ChunkLocationRequest implements Event{

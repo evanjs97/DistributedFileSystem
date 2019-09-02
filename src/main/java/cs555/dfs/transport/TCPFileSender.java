@@ -13,32 +13,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 public class TCPFileSender implements Runnable{
-//	class Destination {
-//		int port;
-//		String hostname;
-//
-//		Destination(String hostname, int port) {
-//			this.hostname = hostname;
-//			this.port = port;
-//		}
-//
-//		public boolean equals(Object o) {
-//			if(o instanceof Destination) {
-//				Destination d = (Destination) o;
-//				return this.hostname.equals(d.hostname) && this.port == d.port;
-//			}else return false;
-//		}
-//	}
-//
-//	class ChunkDestination {
-//		byte[] chunk;
-//		Destination destination;
-//
-//		ChunkDestination(byte[] chunk, Destination destination) {
-//			this.chunk = chunk;
-//			this.destination = destination;
-//		}
-//	}
 
 	private ArrayBlockingQueue<LinkedList<ChunkUtil>> availableLocations = new ArrayBlockingQueue<>(1000);
 	private HashMap<ChunkUtil, TCPSender> senders = new HashMap<>();
@@ -65,19 +39,6 @@ public class TCPFileSender implements Runnable{
 	public void addLocationList(LinkedList<ChunkUtil> locations) {
 		availableLocations.offer(locations);
 	}
-
-//	public void addChunk(String hostname, int port) {
-//		byte[] data =
-//		Destination dest = new Destination(hostname, port);
-//		if(!senders.containsKey(dest)) {
-//			try {
-//				senders.put(dest, new TCPSender(new Socket(hostname, port)));
-//			}catch(IOException ioe) {
-//				ioe.printStackTrace();
-//			}
-//		}
-//		chunks.add(new ChunkDestination(data, dest));
-//	}
 
 	@Override
 	public void run() {

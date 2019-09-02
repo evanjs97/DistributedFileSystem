@@ -33,11 +33,6 @@ public class ClientServer implements Server{
 
 	private void handleChunkLocationResponse(ChunkLocationResponse response) {
 		System.out.println("Client: Received chunk location response");
-//		String filename = this.fileRequest;
-//		this.fileRequest = "";
-//		if(!filename.isEmpty()) {
-//			handleFileUpload(filename, response);
-//		}
 		uploader.addLocationList(response.getLocations());
 	}
 
@@ -67,27 +62,6 @@ public class ClientServer implements Server{
 			}
 		}
 	}
-
-//	private void handleFileUpload(String filename, ChunkLocationResponse response) {
-//		try {
-//			LinkedList<ChunkUtil> locations = response.getLocations();
-//			RandomAccessFile raFile = new RandomAccessFile(filename, "r");
-//			Socket socket = new Socket(locations.getFirst().getHostname(), locations.getFirst().getPort());
-//
-//			int bufferSize = 64 * 1024;
-//			int chunkSize = 64 * 1024;
-//			long fileSize = raFile.length();
-//			long numSplits = fileSize / bufferSize;
-//			if(fileSize % bufferSize > 0) numSplits++;
-//			raFile.
-//
-//
-//		}catch(FileNotFoundException fnfe) {
-//			System.err.println("Client: Error file not found");
-//		}catch(IOException ioe) {
-//			System.err.println("Client: Error error unable to connect to chunk server");
-//		}
-//	}
 
 	private void requestChunkLocations(String filename) {
 		try {
@@ -129,17 +103,24 @@ public class ClientServer implements Server{
 	}
 
 	public static void main(String[] args) {
-		if(args.length < 3) {
-			System.err.println("Error: Must specify at least 3 arguments");
+		if(args.length < 2) {
+			System.err.println("Error: Must specify at least 2 arguments");
 			System.exit(1);
 		}
 		try {
 			String hostname = args[0];
 			int hostPort = Integer.parseInt(args[1]);
-			int clientPort = Integer.parseInt(args[2]);
-			if(hostPort < 1024 || hostPort > 65535 || clientPort < 1024 || clientPort > 65535 || hostPort == clientPort) {
+			int clientPort = 0;
+			if(hostPort < 1024 || hostPort > 65535) {
 				throw new NumberFormatException();
 			}
+			if(args.length > 2) {
+				clientPort = Integer.parseInt(args[2]);
+				if(clientPort < 1024 || clientPort > 65535 || hostPort == clientPort) {
+					throw new NumberFormatException();
+				}
+			}
+
 			ClientServer client = new ClientServer(hostname, hostPort, clientPort);
 			client.init();
 			client.handleUserInput();

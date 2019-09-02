@@ -21,10 +21,6 @@ public class ControllerServer implements Server{
 
 	public ControllerServer(int port) {
 		this.port = port;
-//		this.chunkServers.add(new ChunkUtil("Testing1", 34567));
-//		this.chunkServers.add(new ChunkUtil("Testing2", 33333));
-//		this.chunkServers.add(new ChunkUtil("Testing3", 44444));
-//		this.chunkServers.add(new ChunkUtil("Testing4", 55555));
 	}
 
 	private void init() {
