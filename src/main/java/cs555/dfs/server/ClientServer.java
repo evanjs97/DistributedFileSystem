@@ -15,7 +15,7 @@ public class ClientServer implements Server{
 
 	private final String controllerHostname;
 	private final int controllerPort;
-	private final int port;
+	private int port;
 	private TCPFileSender uploader = null;
 
 
@@ -98,6 +98,7 @@ public class ClientServer implements Server{
 
 	private void init() {
 		TCPServer tcpServer = new TCPServer(port, this);
+		this.port = tcpServer.getLocalPort();
 		Thread server = new Thread(tcpServer);
 		server.start();
 	}

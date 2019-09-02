@@ -14,8 +14,8 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 		return storedChunks;
 	}
 
-	public void setStoredChunks(int storedChunks) {
-		this.storedChunks = storedChunks;
+	public void incrementStoredChunks() {
+		this.storedChunks++;
 	}
 
 	public String getHostname() {

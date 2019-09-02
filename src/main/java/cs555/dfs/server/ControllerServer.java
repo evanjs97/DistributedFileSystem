@@ -36,7 +36,9 @@ public class ControllerServer implements Server{
 			System.out.println(chunkServers.size());
 			for(int i = 0; i < replicationLevel; i++) {
 				if(iter.hasNext()) {
-					replicationServers.add(iter.next());
+					ChunkUtil chunk = iter.next();
+					chunk.incrementStoredChunks();
+					replicationServers.add(chunk);
 				}
 			}
 		}

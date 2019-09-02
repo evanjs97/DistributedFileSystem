@@ -42,6 +42,7 @@ public class TCPReceiver implements Runnable {
 
 				Event event = EventFactory.getInstance().getEvent(data);
 				server.onEvent(event, socket);
+				break;
 			} catch (IOException ioe) {
 				System.err.println("TCPReceiver: Error while reading from socket");
 				ioe.printStackTrace();
@@ -49,6 +50,11 @@ public class TCPReceiver implements Runnable {
 				System.err.println("TCPReceiver: INVALID SIZE: " + dataLength);
 				ne.printStackTrace();
 			}
+		}
+		try {
+			socket.close();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
 		}
 	}
 }

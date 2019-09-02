@@ -7,7 +7,10 @@ import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.net.Socket;
 import java.util.LinkedList;
 
@@ -55,10 +58,39 @@ public class ChunkServer implements Server{
 		byte[] chunk = request.getChunkData();
 		String filename = request.getFilename();
 		LinkedList<ChunkUtil> locations = request.getLocations();
-
+		writeFile(request.getChunkData(), request.getFilename());
 		System.out.println("ChunkServer: Received chunk of size " + chunk.length);
 		System.out.println("ChunkServer: Corresponding filename is " + filename);
-		System.out.println("Next location is: " + locations.getFirst());
+		if(!request.getLocations().isEmpty()) {
+			System.out.println("Next location is: " + locations.getFirst());
+			forwardChunk(request);
+		}
+	}
+
+	private void writeFile(byte[] chunk, String filename) {
+		try {
+			String dir = "/tmp" + filename.substring(0, filename.lastIndexOf("/"));
+			File file = new File(dir);
+			file.mkdirs();
+
+			RandomAccessFile raFile = new RandomAccessFile("/tmp"+filename, "rw");
+			raFile.write(chunk);
+		}catch(FileNotFoundException fnfe) {
+			fnfe.printStackTrace();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+	}
+
+	private void forwardChunk(ChunkWriteRequest request) {
+		ChunkUtil chunkUtil = request.getLocations().pollFirst();
+		try {
+			TCPSender sender = new TCPSender(new Socket(chunkUtil.getHostname(), chunkUtil.getPort()));
+			sender.sendData(request.getBytes());
+			sender.flush();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
 	}
 
 	public static void main(String[] args) {
