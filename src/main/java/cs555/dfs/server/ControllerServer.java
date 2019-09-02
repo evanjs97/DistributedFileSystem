@@ -3,6 +3,7 @@ package cs555.dfs.server;
 import cs555.dfs.messaging.ChunkLocationRequest;
 import cs555.dfs.messaging.ChunkLocationResponse;
 import cs555.dfs.messaging.Event;
+import cs555.dfs.messaging.RegisterRequest;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
@@ -20,10 +21,10 @@ public class ControllerServer implements Server{
 
 	public ControllerServer(int port) {
 		this.port = port;
-		this.chunkServers.add(new ChunkUtil("Testing1", 34567));
-		this.chunkServers.add(new ChunkUtil("Testing2", 33333));
-		this.chunkServers.add(new ChunkUtil("Testing3", 44444));
-		this.chunkServers.add(new ChunkUtil("Testing4", 55555));
+//		this.chunkServers.add(new ChunkUtil("Testing1", 34567));
+//		this.chunkServers.add(new ChunkUtil("Testing2", 33333));
+//		this.chunkServers.add(new ChunkUtil("Testing3", 44444));
+//		this.chunkServers.add(new ChunkUtil("Testing4", 55555));
 	}
 
 	private void init() {
@@ -53,12 +54,20 @@ public class ControllerServer implements Server{
 		}
 	}
 
+	private void registerChunkServer(RegisterRequest request) {
+		System.out.println("Controller: Received register request from " + request.getHostname() + ":" + request.getPort());
+		this.chunkServers.add(new ChunkUtil(request.getHostname(), request.getPort()));
+	}
+
 	@Override
 	public void onEvent(Event event, Socket socket) {
 		switch (event.getType()) {
 			case CHUNK_LOCATION_REQUEST:
 				System.out.println("Controller: Received chunk location request");
 				sendAvailableServers((ChunkLocationRequest) event, socket);
+				break;
+			case REGISTER_REQUEST:
+				registerChunkServer((RegisterRequest) event);
 				break;
 			default:
 				System.err.println("Controller: No event found for request");

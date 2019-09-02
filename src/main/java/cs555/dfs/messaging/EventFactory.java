@@ -55,6 +55,9 @@ public class EventFactory {
 				case CHUNK_WRITE_REQUEST:
 					e = new ChunkWriteRequest(din);
 					break;
+				case REGISTER_REQUEST:
+					e = new RegisterRequest(din);
+					break;
 				default:
 					System.err.println("Event of type " + type + " does not exist.");
 					break;

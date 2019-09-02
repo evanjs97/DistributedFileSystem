@@ -45,7 +45,7 @@ public class ChunkWriteRequest implements Event{
 		//write locations to stream
 		byte[] chunkBytes;
 		dout.writeInt(locations.size());
-		for(int i = 1; i < locations.size(); i++) {
+		for(int i = 0; i < locations.size(); i++) {
 			ChunkUtil chunkServer = locations.get(i);
 			chunkBytes = (chunkServer.getHostname() + ":" + chunkServer.getPort()).getBytes();
 			dout.writeInt(chunkBytes.length);

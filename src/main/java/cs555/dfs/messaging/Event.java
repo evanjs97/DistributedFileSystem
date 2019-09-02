@@ -16,8 +16,7 @@ public interface Event {
 		CHUNK_READ_REQUEST(2),
 		CHUNK_LOCATION_REQUEST(4),
 		CHUNK_LOCATION_RESPONSE(8),
-		UPLOAD_LOCATION_REQUEST(16),
-		UPLOAD_LOCATION_RESPONSE(32);
+		REGISTER_REQUEST(16);
 
 		private int value;
 		private static HashMap<Integer, Type> map = new HashMap<>();

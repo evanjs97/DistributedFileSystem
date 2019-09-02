@@ -2,9 +2,12 @@ package cs555.dfs.server;
 
 import cs555.dfs.messaging.ChunkWriteRequest;
 import cs555.dfs.messaging.Event;
+import cs555.dfs.messaging.RegisterRequest;
+import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
 
+import java.io.IOException;
 import java.net.Socket;
 import java.util.LinkedList;
 
@@ -20,12 +23,19 @@ public class ChunkServer implements Server{
 
 	private void init() {
 		TCPServer tcpServer = new TCPServer(0, this);
+		register(tcpServer.getInetAddress().getHostName(), tcpServer.getLocalPort());
 		Thread server = new Thread(tcpServer);
 		server.start();
 	}
 
-	private void register() {
-		T
+	private void register(String hostname, int port) {
+		try {
+			TCPSender sender = new TCPSender(new Socket(this.hostname, this.port));
+			sender.sendData(new RegisterRequest(hostname, port).getBytes());
+			sender.flush();
+		}catch (IOException ioe) {
+			ioe.printStackTrace();
+		}
 	}
 
 	@Override
