@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.net.Socket;
 
 public class TCPSender {
-	private Socket socket;
-	private DataOutputStream dout;
+	protected Socket socket;
+	protected DataOutputStream dout;
 
 	public TCPSender(Socket socket) throws IOException {
 		this.socket = socket;

@@ -24,8 +24,6 @@ public class ControllerServer implements Server{
 		this.chunkServers.add(new ChunkUtil("Testing2", 33333));
 		this.chunkServers.add(new ChunkUtil("Testing3", 44444));
 		this.chunkServers.add(new ChunkUtil("Testing4", 55555));
-
-
 	}
 
 	private void init() {

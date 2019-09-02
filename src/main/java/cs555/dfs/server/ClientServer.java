@@ -3,9 +3,9 @@ package cs555.dfs.server;
 import cs555.dfs.messaging.ChunkLocationRequest;
 import cs555.dfs.messaging.ChunkLocationResponse;
 import cs555.dfs.messaging.Event;
+import cs555.dfs.transport.TCPFileSender;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
-import cs555.dfs.util.ChunkUtil;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -16,6 +16,8 @@ public class ClientServer implements Server{
 	private final String controllerHostname;
 	private final int controllerPort;
 	private final int port;
+	private TCPFileSender uploader = null;
+
 
 	@Override
 	public void onEvent(Event event, Socket socket) {
@@ -23,7 +25,6 @@ public class ClientServer implements Server{
 			case CHUNK_LOCATION_RESPONSE:
 				handleChunkLocationResponse((ChunkLocationResponse) event);
 				break;
-
 			default:
 				System.err.println("Client: No event found for request");
 				return;
@@ -32,9 +33,12 @@ public class ClientServer implements Server{
 
 	private void handleChunkLocationResponse(ChunkLocationResponse response) {
 		System.out.println("Client: Received chunk location response");
-		for(ChunkUtil server : response.getLocations()) {
-			System.out.println(server);
-		}
+//		String filename = this.fileRequest;
+//		this.fileRequest = "";
+//		if(!filename.isEmpty()) {
+//			handleFileUpload(filename, response);
+//		}
+		uploader.addLocationList(response.getLocations());
 	}
 
 	private void handleUserInput() {
@@ -48,11 +52,14 @@ public class ClientServer implements Server{
 							System.err.println("Error: upload must specify filepath");
 							return;
 						}
-						else handleFileUpload(input[1]);
+						else {
+							requestChunkLocations(input[1]);
+						}
+
 						break;
-					case "test":
-						requestChunkLocations();
-						break;
+//					case "test":
+//						requestChunkLocations();
+//						break;
 					default:
 						System.out.println("Invalid Argument: Use 'help' to learn more");
 						return;
@@ -61,25 +68,50 @@ public class ClientServer implements Server{
 		}
 	}
 
-	private void handleFileUpload(String filename) {
+//	private void handleFileUpload(String filename, ChunkLocationResponse response) {
+//		try {
+//			LinkedList<ChunkUtil> locations = response.getLocations();
+//			RandomAccessFile raFile = new RandomAccessFile(filename, "r");
+//			Socket socket = new Socket(locations.getFirst().getHostname(), locations.getFirst().getPort());
+//
+//			int bufferSize = 64 * 1024;
+//			int chunkSize = 64 * 1024;
+//			long fileSize = raFile.length();
+//			long numSplits = fileSize / bufferSize;
+//			if(fileSize % bufferSize > 0) numSplits++;
+//			raFile.
+//
+//
+//		}catch(FileNotFoundException fnfe) {
+//			System.err.println("Client: Error file not found");
+//		}catch(IOException ioe) {
+//			System.err.println("Client: Error error unable to connect to chunk server");
+//		}
+//	}
+
+	private void requestChunkLocations(String filename) {
 		try {
 			Socket socket = new Socket(controllerHostname, controllerPort);
 			TCPSender sender = new TCPSender(socket);
-//			sender.sendData();
+
+			TCPFileSender fileSender = new TCPFileSender(filename);
+			this.uploader = fileSender;
+
+			long numChunks = fileSender.getNumChunks();
+			Thread thread = new Thread(fileSender);
+			thread.start();
+
+			for(long i = 0; i < numChunks; i++) {
+				sender.sendData(new ChunkLocationRequest(this.port).getBytes());
+				sender.flush();
+			}
+
+			thread.join();
 
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
-		}
-	}
-
-	private void requestChunkLocations() {
-		try {
-			Socket socket = new Socket(controllerHostname, controllerPort);
-			TCPSender sender = new TCPSender(socket);
-			sender.sendData(new ChunkLocationRequest(this.port).getBytes());
-			sender.flush();
-		}catch(IOException ioe) {
-			ioe.printStackTrace();
+		}catch(InterruptedException ie) {
+			ie.printStackTrace();
 		}
 	}
 

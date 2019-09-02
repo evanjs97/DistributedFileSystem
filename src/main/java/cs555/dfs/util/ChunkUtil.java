@@ -31,6 +31,13 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 		return "ChunkServer: " + hostname + " running on port " + port;
 	}
 
+	@Override
+	public boolean equals(Object o) {
+		if(o instanceof ChunkUtil) {
+			ChunkUtil d = (ChunkUtil) o;
+			return this.hostname.equals(d.hostname) && this.port == d.port;
+		}else return false;
+	}
 
 	@Override
 	public int compareTo(ChunkUtil other) {

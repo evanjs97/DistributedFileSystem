@@ -6,8 +6,6 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.util.LinkedList;
-import java.util.Queue;
 
 /**
  * Singleton Instance Design Pattern
@@ -53,6 +51,9 @@ public class EventFactory {
 					break;
 				case CHUNK_LOCATION_RESPONSE:
 					e = new ChunkLocationResponse(din);
+					break;
+				case CHUNK_WRITE_REQUEST:
+					e = new ChunkWriteRequest(din);
 					break;
 				default:
 					System.err.println("Event of type " + type + " does not exist.");
