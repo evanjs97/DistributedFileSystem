@@ -26,8 +26,13 @@ public class TCPHeartbeat implements Runnable{
 				Instant now = Instant.now();
 				Duration duration = Duration.between(start, now);
 				//TO DO: add grace period?
-				if(duration.getSeconds() == beat.getTime()) {
+				if(duration.getSeconds() % beat.getTime() == 0 && duration.getSeconds() > 0) {
 					beat.getHeartbeatTask().execute();
+					try {
+						wait(5);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
 					break;
 				}
 			}
