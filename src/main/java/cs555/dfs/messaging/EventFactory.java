@@ -58,6 +58,12 @@ public class EventFactory {
 				case REGISTER_REQUEST:
 					e = new RegisterRequest(din);
 					break;
+				case CHUNK_SERVER_MAJOR_HEARTBEAT:
+					e = new ChunkServerHeartbeat(din, type);
+					break;
+				case CHUNK_SERVER_MINOR_HEARTBEAT:
+					e = new ChunkServerHeartbeat(din, type);
+					break;
 				default:
 					System.err.println("Event of type " + type + " does not exist.");
 					break;

@@ -1,7 +1,7 @@
 package cs555.dfs.util;
 
 public class ChunkUtil implements Comparable<ChunkUtil>{
-	private int storedChunks = 0;
+	private int assignedChunks = 0;
 	private final String hostname;
 	private final int port;
 
@@ -10,12 +10,12 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 		this.port = port;
 	}
 
-	public int getStoredChunks() {
-		return storedChunks;
+	public int getAssignedChunks() {
+		return assignedChunks;
 	}
 
-	public void incrementStoredChunks() {
-		this.storedChunks++;
+	public void incrementAssignedChunks() {
+		this.assignedChunks++;
 	}
 
 	public String getHostname() {
@@ -41,9 +41,14 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 
 	@Override
 	public int compareTo(ChunkUtil other) {
-		if(this.storedChunks != other.storedChunks) return Integer.compare(this.storedChunks, other.storedChunks);
+		if(this.assignedChunks != other.assignedChunks) return Integer.compare(this.assignedChunks, other.assignedChunks);
 		int host = this.hostname.compareTo(other.hostname);
 		if(host != 0) return host;
 		else return Integer.compare(this.port, other.port);
+	}
+
+	@Override
+	public int hashCode() {
+		return hostname.hashCode() + port;
 	}
 }

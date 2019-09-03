@@ -12,11 +12,14 @@ public interface Event {
 	public byte[] getBytes() throws IOException;
 
 	enum Type {
-		CHUNK_WRITE_REQUEST(1),
-		CHUNK_READ_REQUEST(2),
-		CHUNK_LOCATION_REQUEST(4),
-		CHUNK_LOCATION_RESPONSE(8),
-		REGISTER_REQUEST(16);
+		CHUNK_WRITE_REQUEST(0),
+		CHUNK_READ_REQUEST(1),
+		CHUNK_LOCATION_REQUEST(2),
+		CHUNK_LOCATION_RESPONSE(3),
+		REGISTER_REQUEST(4),
+		CHUNK_SERVER_MAJOR_HEARTBEAT(5),
+		CHUNK_SERVER_MINOR_HEARTBEAT(6);
+
 
 		private int value;
 		private static HashMap<Integer, Type> map = new HashMap<>();

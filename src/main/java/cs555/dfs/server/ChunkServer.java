@@ -13,11 +13,16 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.Socket;
 import java.util.LinkedList;
+import java.util.List;
 
 public class ChunkServer implements Server{
 
 	private final String hostname;
 	private final int port;
+	private final List<String> files = new LinkedList<>();
+	private final List<String> newFiles = new LinkedList<>();
+
+	private static final String BASE_DIR = "/tmp";
 
 	public ChunkServer(String hostname, int port) {
 		this.hostname = hostname;
@@ -69,12 +74,19 @@ public class ChunkServer implements Server{
 
 	private void writeFile(byte[] chunk, String filename) {
 		try {
-			String dir = "/tmp" + filename.substring(0, filename.lastIndexOf("/"));
+			filename = BASE_DIR + filename;
+			String dir = filename.substring(0, filename.lastIndexOf("/"));
 			File file = new File(dir);
 			file.mkdirs();
 
-			RandomAccessFile raFile = new RandomAccessFile("/tmp"+filename, "rw");
+			RandomAccessFile raFile = new RandomAccessFile(filename, "rw");
 			raFile.write(chunk);
+			synchronized (newFiles) {
+				newFiles.add(filename);
+			}
+			synchronized (files) {
+				files.add(filename);
+			}
 		}catch(FileNotFoundException fnfe) {
 			fnfe.printStackTrace();
 		}catch(IOException ioe) {

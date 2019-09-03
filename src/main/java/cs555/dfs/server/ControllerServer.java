@@ -15,6 +15,8 @@ import java.util.*;
 public class ControllerServer implements Server{
 
 
+//	HashSet<ChunkUtil> chunkServerMapping = new HashSet<>();
+	HashMap<String, ChunkUtil> fileToServer = new HashMap<>();
 	SortedSet<ChunkUtil> chunkServers = new TreeSet<>();
 	private final int replicationLevel = 3;
 	private final int port;
@@ -37,7 +39,7 @@ public class ControllerServer implements Server{
 			for(int i = 0; i < replicationLevel; i++) {
 				if(iter.hasNext()) {
 					ChunkUtil chunk = iter.next();
-					chunk.incrementStoredChunks();
+					chunk.incrementAssignedChunks();
 					replicationServers.add(chunk);
 				}
 			}
@@ -54,7 +56,8 @@ public class ControllerServer implements Server{
 
 	private void registerChunkServer(RegisterRequest request) {
 		System.out.println("Controller: Received register request from " + request.getHostname() + ":" + request.getPort());
-		this.chunkServers.add(new ChunkUtil(request.getHostname(), request.getPort()));
+		ChunkUtil chunkUtil = new ChunkUtil(request.getHostname(), request.getPort());
+		this.chunkServers.add(chunkUtil);
 	}
 
 	@Override

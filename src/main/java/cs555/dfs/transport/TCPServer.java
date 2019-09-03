@@ -1,7 +1,6 @@
 package cs555.dfs.transport;
 
 import cs555.dfs.server.Server;
-import cs555.dfs.transport.TCPReceiver;
 
 import java.io.IOException;
 import java.net.InetAddress;
