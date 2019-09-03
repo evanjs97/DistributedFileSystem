@@ -21,18 +21,15 @@ public class TCPHeartbeat implements Runnable{
 	@Override
 	public void run() {
 		final Instant start = Instant.now();
+		long lastSeconds = 0;
 		while(true) {
 			for(Heartbeat beat : heartbeatIntervals) {
 				Instant now = Instant.now();
 				Duration duration = Duration.between(start, now);
 				//TO DO: add grace period?
-				if(duration.getSeconds() % beat.getTime() == 0 && duration.getSeconds() > 0) {
+				if(duration.getSeconds() % beat.getTime() == 0 && duration.getSeconds() > 0 && lastSeconds != duration.getSeconds()) {
+					lastSeconds = duration.getSeconds();
 					beat.getHeartbeatTask().execute();
-					try {
-						wait(5);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
 					break;
 				}
 			}
