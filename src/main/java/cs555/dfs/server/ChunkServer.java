@@ -2,10 +2,13 @@ package cs555.dfs.server;
 
 import cs555.dfs.messaging.ChunkWriteRequest;
 import cs555.dfs.messaging.Event;
+import cs555.dfs.messaging.HeartbeatTask;
 import cs555.dfs.messaging.RegisterRequest;
+import cs555.dfs.transport.TCPHeartbeat;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
+import cs555.dfs.util.Heartbeat;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -35,6 +38,13 @@ public class ChunkServer implements Server{
 		register(tcpServer.getInetAddress().getHostName(), tcpServer.getLocalPort());
 		Thread server = new Thread(tcpServer);
 		server.start();
+
+		List<Heartbeat> heartbeatList = new LinkedList<>();
+		heartbeatList.add(new Heartbeat(30, new HeartbeatTask(hostname, port, newFiles, Event.Type.CHUNK_SERVER_MINOR_HEARTBEAT)));
+		heartbeatList.add(new Heartbeat(5 * 60, new HeartbeatTask(hostname, port, files, Event.Type.CHUNK_SERVER_MAJOR_HEARTBEAT)));
+		TCPHeartbeat heartbeat = new TCPHeartbeat(heartbeatList);
+		Thread heartbeatThread = new Thread(heartbeat);
+		heartbeatThread.start();
 	}
 
 	private void register(String hostname, int port) {

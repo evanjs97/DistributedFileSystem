@@ -50,6 +50,10 @@ public class FileMetadata {
 		return null;
 	}
 
+	public String toString() {
+		return this.filename + " last modified at " + lastModified;
+	}
+
 	public byte[] getBytes() throws IOException{
 		byte[] marshalledData;
 		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();

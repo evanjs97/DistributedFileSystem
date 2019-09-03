@@ -11,14 +11,11 @@ public class TCPHeartbeat implements Runnable{
 
 
 	private final List<Heartbeat> heartbeatIntervals;
-	private final String destHost;
-	private final int destPort;
 
-	public TCPHeartbeat(List<Heartbeat> heartbeatIntervals, String destHost, int destPort) {
+
+	public TCPHeartbeat(List<Heartbeat> heartbeatIntervals) {
 		this.heartbeatIntervals = heartbeatIntervals;
 		Collections.sort(this.heartbeatIntervals);
-		this.destHost = destHost;
-		this.destPort = destPort;
 	}
 
 	@Override

@@ -1,9 +1,6 @@
 package cs555.dfs.server;
 
-import cs555.dfs.messaging.ChunkLocationRequest;
-import cs555.dfs.messaging.ChunkLocationResponse;
-import cs555.dfs.messaging.Event;
-import cs555.dfs.messaging.RegisterRequest;
+import cs555.dfs.messaging.*;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
@@ -60,6 +57,14 @@ public class ControllerServer implements Server{
 		this.chunkServers.add(chunkUtil);
 	}
 
+	private void handleMajorHeartbeat(ChunkServerHeartbeat heartbeat) {
+		System.out.println(heartbeat);
+	}
+
+	private void handleMinorHeartbeat(ChunkServerHeartbeat heartbeat) {
+		System.out.println(heartbeat);
+	}
+
 	@Override
 	public void onEvent(Event event, Socket socket) {
 		switch (event.getType()) {
@@ -69,6 +74,12 @@ public class ControllerServer implements Server{
 				break;
 			case REGISTER_REQUEST:
 				registerChunkServer((RegisterRequest) event);
+				break;
+			case CHUNK_SERVER_MAJOR_HEARTBEAT:
+				handleMajorHeartbeat((ChunkServerHeartbeat) event);
+				break;
+			case CHUNK_SERVER_MINOR_HEARTBEAT:
+				handleMinorHeartbeat((ChunkServerHeartbeat) event);
 				break;
 			default:
 				System.err.println("Controller: No event found for request");

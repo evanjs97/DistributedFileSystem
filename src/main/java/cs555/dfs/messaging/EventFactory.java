@@ -44,7 +44,6 @@ public class EventFactory {
 		try {
 			Type type = Type.valueOf(din.readInt());
 			Event e = null;
-			System.out.println(type);
 			switch (type) {
 				case CHUNK_LOCATION_REQUEST:
 					e = new ChunkLocationRequest(din);

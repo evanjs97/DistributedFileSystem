@@ -3,6 +3,7 @@ package cs555.dfs.messaging;
 import cs555.dfs.util.FileMetadata;
 
 import java.io.*;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -36,6 +37,15 @@ public class ChunkServerHeartbeat implements Event{
 	@Override
 	public Type getType() {
 		return this.type;
+	}
+
+	public String toString() {
+		StringBuilder output = new StringBuilder();
+		output.append("Heartbeat " + Instant.now() + ":\n");
+		for(FileMetadata metadata : fileInfo) {
+			output.append(metadata.toString());
+		}
+		return output.toString();
 	}
 
 

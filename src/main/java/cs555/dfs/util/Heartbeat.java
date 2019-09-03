@@ -2,21 +2,24 @@ package cs555.dfs.util;
 
 import cs555.dfs.messaging.HeartbeatTask;
 
+import java.util.List;
+
 public class Heartbeat implements Comparable<Heartbeat>{
-	private final int time;
+	private final long time;
 	private final HeartbeatTask task;
 
-	Heartbeat(int time, HeartbeatTask task) {
+
+	public Heartbeat(long time, HeartbeatTask task) {
 		this.time = time;
 		this.task = task;
 	}
 
 	@Override
 	public int compareTo(Heartbeat h) {
-		return Integer.compare(h.time, time);
+		return Long.compare(h.time, time);
 	}
 
-	public int getTime() {
+	public long getTime() {
 		return this.time;
 	}
 
