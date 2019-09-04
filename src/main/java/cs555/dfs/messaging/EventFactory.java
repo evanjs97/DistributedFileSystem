@@ -45,11 +45,11 @@ public class EventFactory {
 			Type type = Type.valueOf(din.readInt());
 			Event e = null;
 			switch (type) {
-				case CHUNK_LOCATION_REQUEST:
-					e = new ChunkLocationRequest(din);
+				case CHUNK_DESTINATION_REQUEST:
+					e = new ChunkDestinationRequest(din);
 					break;
-				case CHUNK_LOCATION_RESPONSE:
-					e = new ChunkLocationResponse(din);
+				case CHUNK_DESTINATION_RESPONSE:
+					e = new ChunkDestinationResponse(din);
 					break;
 				case CHUNK_WRITE_REQUEST:
 					e = new ChunkWriteRequest(din);
@@ -63,6 +63,11 @@ public class EventFactory {
 				case CHUNK_SERVER_MINOR_HEARTBEAT:
 					e = new ChunkServerHeartbeat(din, type);
 					break;
+				case CHUNK_LOCATION_REQUEST:
+					e = new ChunkLocationRequest(din);
+					break;
+				case CHUNK_LOCATION_RESPONSE:
+					e = new ChunkLocationResponse(din);
 				default:
 					System.err.println("Event of type " + type + " does not exist.");
 					break;

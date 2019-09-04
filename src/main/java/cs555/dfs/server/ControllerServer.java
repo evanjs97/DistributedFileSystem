@@ -28,7 +28,7 @@ public class ControllerServer implements Server{
 		server.start();
 	}
 
-	private void sendAvailableServers(ChunkLocationRequest request, Socket socket)  {
+	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 		synchronized (chunkServers) {
 			Iterator<ChunkUtil> iter = chunkServers.iterator();
@@ -44,7 +44,7 @@ public class ControllerServer implements Server{
 		try {
 			System.out.println("Controller: Sending chunk location response");
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getHostName(), request.getPort()));
-			sender.sendData(new ChunkLocationResponse(replicationServers).getBytes());
+			sender.sendData(new ChunkDestinationResponse(replicationServers).getBytes());
 			sender.flush();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
@@ -65,12 +65,31 @@ public class ControllerServer implements Server{
 		System.out.println(heartbeat);
 	}
 
+	private void handleChunkLocationRequest(ChunkLocationRequest request, Socket socket) {
+		ChunkUtil util = fileToServer.get(request.getFilename());
+		try {
+			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getHostName(), request.getPort()));
+			if(util != null) {
+				System.out.println("Controller: Found chunk location for " + request.getFilename());
+				sender.sendData(new ChunkLocationResponse(util.getHostname(), util.getPort(), true).getBytes());
+				sender.flush();
+
+			}else {
+				System.err.println("Controller: Unable to find the chunks location for" + request.getFilename());
+				sender.sendData(new ChunkLocationResponse("", 0, false).getBytes());
+				sender.flush();
+			}
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+	}
+
 	@Override
 	public void onEvent(Event event, Socket socket) {
 		switch (event.getType()) {
-			case CHUNK_LOCATION_REQUEST:
+			case CHUNK_DESTINATION_REQUEST:
 				System.out.println("Controller: Received chunk location request");
-				sendAvailableServers((ChunkLocationRequest) event, socket);
+				sendAvailableServers((ChunkDestinationRequest) event, socket);
 				break;
 			case REGISTER_REQUEST:
 				registerChunkServer((RegisterRequest) event);
@@ -80,6 +99,9 @@ public class ControllerServer implements Server{
 				break;
 			case CHUNK_SERVER_MINOR_HEARTBEAT:
 				handleMinorHeartbeat((ChunkServerHeartbeat) event);
+				break;
+			case CHUNK_LOCATION_REQUEST:
+				handleChunkLocationRequest((ChunkLocationRequest) event, socket);
 				break;
 			default:
 				System.err.println("Controller: No event found for request");

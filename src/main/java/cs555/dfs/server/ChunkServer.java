@@ -15,6 +15,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.Socket;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -23,6 +24,7 @@ public class ChunkServer implements Server{
 	private final String hostname;
 	private final int port;
 	private final List<String> files = new LinkedList<>();
+//	private final HashMap<String, String> filepathToName = new HashMap<>();
 	private final List<String> newFiles = new LinkedList<>();
 
 	private static final String BASE_DIR = "/tmp";
@@ -30,6 +32,21 @@ public class ChunkServer implements Server{
 	public ChunkServer(String hostname, int port) {
 		this.hostname = hostname;
 		this.port = port;
+	}
+
+	public List<String> getRecentFiles() {
+		return this.newFiles;
+	}
+
+	public List<String> getAllFiles() {
+//		return new LinkedList<>(filepathToName.values());
+		return this.files;
+	}
+
+	public void clearRecentFiles() {
+		synchronized (newFiles) {
+			newFiles.clear();
+		}
 	}
 
 	private void init() {
@@ -40,8 +57,8 @@ public class ChunkServer implements Server{
 		server.start();
 
 		List<Heartbeat> heartbeatList = new LinkedList<>();
-		heartbeatList.add(new Heartbeat(30, new HeartbeatTask(hostname, port, newFiles, Event.Type.CHUNK_SERVER_MINOR_HEARTBEAT)));
-		heartbeatList.add(new Heartbeat(5 * 60, new HeartbeatTask(hostname, port, files, Event.Type.CHUNK_SERVER_MAJOR_HEARTBEAT)));
+		heartbeatList.add(new Heartbeat(30, new HeartbeatTask(hostname, port, this, Event.Type.CHUNK_SERVER_MINOR_HEARTBEAT)));
+		heartbeatList.add(new Heartbeat(5 * 60, new HeartbeatTask(hostname, port, this, Event.Type.CHUNK_SERVER_MAJOR_HEARTBEAT)));
 		TCPHeartbeat heartbeat = new TCPHeartbeat(heartbeatList);
 		Thread heartbeatThread = new Thread(heartbeat);
 		heartbeatThread.start();
@@ -84,17 +101,17 @@ public class ChunkServer implements Server{
 
 	private void writeFile(byte[] chunk, String filename) {
 		try {
-			filename = BASE_DIR + filename;
-			String dir = filename.substring(0, filename.lastIndexOf("/"));
+			String dir = BASE_DIR + filename.substring(0, filename.lastIndexOf("/"));
 			File file = new File(dir);
 			file.mkdirs();
-
-			RandomAccessFile raFile = new RandomAccessFile(filename, "rw");
+			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "rw");
 			raFile.write(chunk);
+//			String shortName = filename.substring(filename.lastIndexOf("/"+1));
 			synchronized (newFiles) {
 				newFiles.add(filename);
 			}
 			synchronized (files) {
+//				filepathToName.put(filename, shortName);
 				files.add(filename);
 			}
 		}catch(FileNotFoundException fnfe) {
@@ -102,6 +119,10 @@ public class ChunkServer implements Server{
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
+	}
+
+	private void readFile(String filename) {
+
 	}
 
 	private void forwardChunk(ChunkWriteRequest request) {

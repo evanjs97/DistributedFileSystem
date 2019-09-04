@@ -1,5 +1,6 @@
 package cs555.dfs.transport;
 
+import cs555.dfs.server.ChunkServer;
 import cs555.dfs.util.Heartbeat;
 
 import java.time.Duration;

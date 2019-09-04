@@ -1,15 +1,27 @@
 package cs555.dfs.messaging;
 
-import cs555.dfs.server.ControllerServer;
-import cs555.dfs.util.ChunkUtil;
-
 import java.io.*;
-import java.util.LinkedList;
 
 public class ChunkLocationResponse implements Event{
+
+	private final String hostname;
+	private final int port;
+	private final boolean success;
 	@Override
 	public Type getType() {
 		return Type.CHUNK_LOCATION_RESPONSE;
+	}
+
+	public String getHostname() {
+		return hostname;
+	}
+
+	public int getPort() {
+		return port;
+	}
+
+	public boolean isSuccess() {
+		return success;
 	}
 
 	@Override
@@ -19,51 +31,46 @@ public class ChunkLocationResponse implements Event{
 		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
 
 		dout.writeInt(getType().getValue());
+		dout.writeBoolean(success);
 
-		byte[] chunkBytes;
-		dout.writeInt(locations.size());
-		for(ChunkUtil chunkServer : locations) {
-			chunkBytes = (chunkServer.getHostname() + ":" + chunkServer.getPort()).getBytes();
-			dout.writeInt(chunkBytes.length);
-			dout.write(chunkBytes);
-		}
+		byte[] hostBytes = hostname.getBytes();
+		dout.write(hostBytes.length);
+		dout.write(hostBytes);
+
+		dout.writeInt(port);
+
 		dout.flush();
 		marshalledData = baOutStream.toByteArray();
-
 		baOutStream.close();
 		dout.close();
+
 		return marshalledData;
 	}
 
-	private final LinkedList<ChunkUtil> locations;
-
-	public ChunkLocationResponse(LinkedList<ChunkUtil> locations) {
-		this.locations = locations;
+	public ChunkLocationResponse(String hostname, int port, boolean success) {
+		this.hostname = hostname;
+		this.port = port;
+		this.success = success;
 	}
 
 	public ChunkLocationResponse(DataInputStream din) {
-		this.locations = new LinkedList<>();
+		String hostname = "";
+		int port = 0;
+		boolean success = false;
 		try {
-			byte[] location;
-			int num = din.readInt();
-			for (int i = 0; i < num; i++) {
-				int length = din.readInt();
+			success = din.readBoolean();
+			int hostLength = din.readInt();
+			byte[] hostBytes = new byte[hostLength];
+			din.readFully(hostBytes);
+			hostname = new String(hostBytes);
 
-				location = new byte[length];
-				din.readFully(location);
-
-				String[] split = new String(location).split(":");
-				locations.add(new ChunkUtil(split[0], Integer.parseInt(split[1])));
-
-			}
+			port = din.readInt();
 			din.close();
-
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
-	}
-
-	public LinkedList<ChunkUtil> getLocations() {
-		return locations;
+		this.hostname = hostname;
+		this.port = port;
+		this.success = success;
 	}
 }

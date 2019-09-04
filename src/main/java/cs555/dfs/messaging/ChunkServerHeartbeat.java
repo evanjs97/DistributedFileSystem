@@ -69,6 +69,8 @@ public class ChunkServerHeartbeat implements Event{
 
 		baOutStream.close();
 		dout.close();
+
+
 		return marshalledData;
 
 	}
