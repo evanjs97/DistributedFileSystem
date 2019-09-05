@@ -4,6 +4,7 @@ import cs555.dfs.messaging.*;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
+import cs555.dfs.util.FileMetadata;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -14,6 +15,7 @@ public class ControllerServer implements Server{
 
 //	HashSet<ChunkUtil> chunkServerMapping = new HashSet<>();
 	HashMap<String, ChunkUtil> fileToServer = new HashMap<>();
+	HashMap<String, ChunkUtil> hostToServerObject = new HashMap<>();
 	SortedSet<ChunkUtil> chunkServers = new TreeSet<>();
 	private final int replicationLevel = 3;
 	private final int port;
@@ -55,28 +57,39 @@ public class ControllerServer implements Server{
 		System.out.println("Controller: Received register request from " + request.getHostname() + ":" + request.getPort());
 		ChunkUtil chunkUtil = new ChunkUtil(request.getHostname(), request.getPort());
 		this.chunkServers.add(chunkUtil);
+		this.hostToServerObject.put(request.getHostname()+":"+request.getPort(), chunkUtil);
 	}
 
-	private void handleMajorHeartbeat(ChunkServerHeartbeat heartbeat) {
+	private void handleMajorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
+
 		System.out.println(heartbeat);
 	}
 
-	private void handleMinorHeartbeat(ChunkServerHeartbeat heartbeat) {
-		System.out.println(heartbeat);
+	private void handleMinorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
+		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort());
+		for(FileMetadata metadata : heartbeat.getFileInfo()) {
+			ChunkUtil chunkUtil = hostToServerObject.get(socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort());
+			if(chunkUtil != null) {
+				fileToServer.put(metadata.getFilename(), chunkUtil);
+			}else {
+				System.err.println("Error: Chunk server is not registered");
+			}
+		}
 	}
 
 	private void handleChunkLocationRequest(ChunkLocationRequest request, Socket socket) {
+		System.out.println(request.getFilename());
 		ChunkUtil util = fileToServer.get(request.getFilename());
 		try {
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getHostName(), request.getPort()));
 			if(util != null) {
 				System.out.println("Controller: Found chunk location for " + request.getFilename());
-				sender.sendData(new ChunkLocationResponse(util.getHostname(), util.getPort(), true).getBytes());
+				sender.sendData(new ChunkLocationResponse(util.getHostname(), util.getPort(), true, request.getFilename()).getBytes());
 				sender.flush();
 
 			}else {
 				System.err.println("Controller: Unable to find the chunks location for" + request.getFilename());
-				sender.sendData(new ChunkLocationResponse("", 0, false).getBytes());
+				sender.sendData(new ChunkLocationResponse("", 0, false, request.getFilename()).getBytes());
 				sender.flush();
 			}
 		}catch(IOException ioe) {
@@ -88,17 +101,17 @@ public class ControllerServer implements Server{
 	public void onEvent(Event event, Socket socket) {
 		switch (event.getType()) {
 			case CHUNK_DESTINATION_REQUEST:
-				System.out.println("Controller: Received chunk location request");
+				System.out.println("Controller: Received chunk destination request");
 				sendAvailableServers((ChunkDestinationRequest) event, socket);
 				break;
 			case REGISTER_REQUEST:
 				registerChunkServer((RegisterRequest) event);
 				break;
 			case CHUNK_SERVER_MAJOR_HEARTBEAT:
-				handleMajorHeartbeat((ChunkServerHeartbeat) event);
+				handleMajorHeartbeat((ChunkServerHeartbeat) event, socket);
 				break;
 			case CHUNK_SERVER_MINOR_HEARTBEAT:
-				handleMinorHeartbeat((ChunkServerHeartbeat) event);
+				handleMinorHeartbeat((ChunkServerHeartbeat) event, socket);
 				break;
 			case CHUNK_LOCATION_REQUEST:
 				handleChunkLocationRequest((ChunkLocationRequest) event, socket);

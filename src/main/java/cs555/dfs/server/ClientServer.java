@@ -1,6 +1,7 @@
 package cs555.dfs.server;
 
 import cs555.dfs.messaging.*;
+import cs555.dfs.transport.TCPFileReader;
 import cs555.dfs.transport.TCPFileSender;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
@@ -19,7 +20,8 @@ public class ClientServer implements Server{
 	private final int controllerPort;
 	private int port;
 	private TCPFileSender uploader = null;
-	private HashMap<String, Long> filenametoChunks = new HashMap<>();
+	private HashMap<String, Long> filenameToChunks = new HashMap<>();
+	private TCPFileReader reader = null;
 
 
 	@Override
@@ -30,6 +32,9 @@ public class ClientServer implements Server{
 				break;
 			case CHUNK_LOCATION_RESPONSE:
 				handleChunkLocationResponse((ChunkLocationResponse) event);
+				break;
+			case CHUNK_READ_RESPONSE:
+				handleChunkReadResponse((ChunkReadResponse) event);
 				break;
 			default:
 				System.err.println("Client: No event found for request");
@@ -48,6 +53,17 @@ public class ClientServer implements Server{
 
 	private void handleChunkLocationResponse(ChunkLocationResponse response) {
 		System.out.println("Client: Received chunk location: " + response.getHostname() + ":" + response.getPort());
+		System.out.println("Filename is: " + response.getFilename());
+		try {
+			TCPSender sender = new TCPSender(new Socket(response.getHostname(), response.getPort()));
+			sender.sendData(new ChunkReadRequest(response.getFilename(), port).getBytes());
+			sender.flush();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+	}
+	private void handleChunkReadResponse(ChunkReadResponse response) {
+		reader.addFileBytes(response.getChunk());
 	}
 
 	private void handleUserInput() {
@@ -62,18 +78,18 @@ public class ClientServer implements Server{
 							break;
 						}
 						else {
-							requestChunkLocations(input[1]);
+							requestChunkDestinations(input[1]);
 						}
 
 						break;
 					case "get":
-						if(input.length < 2) {
-							System.err.println("Error: get must specify filename");
+						if(input.length < 3) {
+							System.err.println("Error: get must specify filename and destination");
 							break;
 						}
 						else {
-
-						}requestChunkLocations(input[1]);
+							requestChunkLocations(input[1], input[2]);
+						}
 						break;
 					default:
 						System.out.println("Invalid Argument: Use 'help' to learn more");
@@ -83,7 +99,7 @@ public class ClientServer implements Server{
 		}
 	}
 
-	private void requestChunkLocations(String filename) {
+	private void requestChunkDestinations(String filename) {
 		try {
 			Socket socket = new Socket(controllerHostname, controllerPort);
 			TCPSender sender = new TCPSender(socket);
@@ -95,9 +111,10 @@ public class ClientServer implements Server{
 			Thread thread = new Thread(fileSender);
 			thread.start();
 
+			File f = new File(filename);
 
 			for(long i = 0; i < numChunks; i++) {
-				this.filenametoChunks.put(new File(filename).getAbsolutePath(), numChunks);
+				this.filenameToChunks.put(f.getAbsolutePath(), numChunks);
 				sender.sendData(new ChunkDestinationRequest(this.port).getBytes());
 				sender.flush();
 			}
@@ -111,9 +128,8 @@ public class ClientServer implements Server{
 		}
 	}
 
-	private void requestFileLocations(String filename) {
-		Long chunks = this.filenametoChunks.get(filename);
-		if(filename.contains("/")) filename = filename.substring(filename.lastIndexOf("/")+1);
+	private void requestChunkLocations(String filename, String destination) {
+		Long chunks = this.filenameToChunks.get(filename);
 		try {
 			Socket socket = new Socket(controllerHostname, controllerPort);
 			TCPSender sender = new TCPSender(socket);
@@ -121,6 +137,8 @@ public class ClientServer implements Server{
 				sender.sendData(new ChunkLocationRequest(filename+"_chunk_"+i, port).getBytes());
 				sender.flush();
 			}
+			reader = new TCPFileReader(filename, chunks, destination);
+			reader.readFile();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}

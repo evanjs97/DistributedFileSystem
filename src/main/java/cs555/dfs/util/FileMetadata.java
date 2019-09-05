@@ -18,6 +18,14 @@ public class FileMetadata {
 		this.lastModified = lastModified;
 	}
 
+	public String getFilename() {
+		return this.filename;
+	}
+
+	public Instant getLasModified() {
+		return this.lastModified;
+	}
+
 	public FileMetadata(DataInputStream din) {
 		String filename = "";
 		Instant lastModified = null;
@@ -39,10 +47,10 @@ public class FileMetadata {
 		this.lastModified = lastModified;
 	}
 
-	public static FileMetadata getFileMetadata(String filename) {
+	public static FileMetadata getFileMetadata(String baseDir, String filename) {
 		try {
 			Instant lastModified = Files.getLastModifiedTime(FileSystems.getDefault()
-					.getPath(filename), LinkOption.NOFOLLOW_LINKS).toInstant();
+					.getPath(baseDir+filename), LinkOption.NOFOLLOW_LINKS).toInstant();
 			return new FileMetadata(filename, lastModified);
 		}catch(IOException ioe) {
 			ioe.printStackTrace();

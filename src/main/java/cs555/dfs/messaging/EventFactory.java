@@ -68,6 +68,13 @@ public class EventFactory {
 					break;
 				case CHUNK_LOCATION_RESPONSE:
 					e = new ChunkLocationResponse(din);
+					break;
+				case CHUNK_READ_REQUEST:
+					e = new ChunkReadRequest(din);
+					break;
+				case CHUNK_READ_RESPONSE:
+					e = new ChunkReadResponse(din);
+					break;
 				default:
 					System.err.println("Event of type " + type + " does not exist.");
 					break;

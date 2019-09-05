@@ -12,15 +12,27 @@ public class ChunkServerHeartbeat implements Event{
 
 	private final Type type;
 	private final List<FileMetadata> fileInfo;
+	private final int port;
 
-	public ChunkServerHeartbeat(List<FileMetadata> fileInfo, Type type) {
+	public ChunkServerHeartbeat(List<FileMetadata> fileInfo, Type type, int port) {
 		this.type = type;
 		this.fileInfo = Collections.unmodifiableList(fileInfo);
+		this.port = port;
+	}
+
+	public List<FileMetadata> getFileInfo() {
+		return fileInfo;
+	}
+
+	public int getPort() {
+		return port;
 	}
 
 	public ChunkServerHeartbeat(DataInputStream din, Type type) {
 		List<FileMetadata> fileInfo = new LinkedList<>();
+		int port = 0;
 		try {
+			port = din.readInt();
 			int listSize = din.readInt();
 			for(int i = 0; i < listSize; i++) {
 				fileInfo.add(new FileMetadata(din));
@@ -32,6 +44,7 @@ public class ChunkServerHeartbeat implements Event{
 		}
 		this.fileInfo = fileInfo;
 		this.type = type;
+		this.port = port;
 	}
 
 	@Override
@@ -57,6 +70,7 @@ public class ChunkServerHeartbeat implements Event{
 		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
 
 		dout.writeInt(getType().getValue());
+		dout.writeInt(port);
 
 		dout.writeInt(fileInfo.size());
 		for(FileMetadata metadata : fileInfo) {

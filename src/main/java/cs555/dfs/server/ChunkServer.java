@@ -1,9 +1,6 @@
 package cs555.dfs.server;
 
-import cs555.dfs.messaging.ChunkWriteRequest;
-import cs555.dfs.messaging.Event;
-import cs555.dfs.messaging.HeartbeatTask;
-import cs555.dfs.messaging.RegisterRequest;
+import cs555.dfs.messaging.*;
 import cs555.dfs.transport.TCPHeartbeat;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
@@ -22,7 +19,8 @@ import java.util.List;
 public class ChunkServer implements Server{
 
 	private final String hostname;
-	private final int port;
+	private final int hostPort;
+	private int port;
 	private final List<String> files = new LinkedList<>();
 //	private final HashMap<String, String> filepathToName = new HashMap<>();
 	private final List<String> newFiles = new LinkedList<>();
@@ -31,7 +29,7 @@ public class ChunkServer implements Server{
 
 	public ChunkServer(String hostname, int port) {
 		this.hostname = hostname;
-		this.port = port;
+		this.hostPort = port;
 	}
 
 	public List<String> getRecentFiles() {
@@ -43,6 +41,10 @@ public class ChunkServer implements Server{
 		return this.files;
 	}
 
+	public final int getPort() {
+		return port;
+	}
+
 	public void clearRecentFiles() {
 		synchronized (newFiles) {
 			newFiles.clear();
@@ -51,14 +53,15 @@ public class ChunkServer implements Server{
 
 	private void init() {
 		TCPServer tcpServer = new TCPServer(0, this);
-		System.out.println("ChunkServer: Starting on " + tcpServer.getInetAddress().getHostName()+":"+tcpServer.getLocalPort());
-		register(tcpServer.getInetAddress().getHostName(), tcpServer.getLocalPort());
+		System.out.println("ChunkServer: Starting on " + tcpServer.getInetAddress().getCanonicalHostName()+":"+tcpServer.getLocalPort());
+		this.port = tcpServer.getLocalPort();
+		register(tcpServer.getInetAddress().getCanonicalHostName(), tcpServer.getLocalPort());
 		Thread server = new Thread(tcpServer);
 		server.start();
 
 		List<Heartbeat> heartbeatList = new LinkedList<>();
-		heartbeatList.add(new Heartbeat(30, new HeartbeatTask(hostname, port, this, Event.Type.CHUNK_SERVER_MINOR_HEARTBEAT)));
-		heartbeatList.add(new Heartbeat(5 * 60, new HeartbeatTask(hostname, port, this, Event.Type.CHUNK_SERVER_MAJOR_HEARTBEAT)));
+		heartbeatList.add(new Heartbeat(30, new HeartbeatTask(hostname, hostPort, this, Event.Type.CHUNK_SERVER_MINOR_HEARTBEAT, BASE_DIR)));
+		heartbeatList.add(new Heartbeat(5 * 60, new HeartbeatTask(hostname, hostPort, this, Event.Type.CHUNK_SERVER_MAJOR_HEARTBEAT, BASE_DIR)));
 		TCPHeartbeat heartbeat = new TCPHeartbeat(heartbeatList);
 		Thread heartbeatThread = new Thread(heartbeat);
 		heartbeatThread.start();
@@ -66,7 +69,7 @@ public class ChunkServer implements Server{
 
 	private void register(String hostname, int port) {
 		try {
-			TCPSender sender = new TCPSender(new Socket(this.hostname, this.port));
+			TCPSender sender = new TCPSender(new Socket(this.hostname, this.hostPort));
 			sender.sendData(new RegisterRequest(hostname, port).getBytes());
 			sender.flush();
 		}catch (IOException ioe) {
@@ -80,6 +83,8 @@ public class ChunkServer implements Server{
 			case CHUNK_WRITE_REQUEST:
 				writeChunk((ChunkWriteRequest) event);
 				break;
+			case CHUNK_READ_REQUEST:
+				handleFileReadRequest((ChunkReadRequest) event, socket);
 			default:
 				System.err.println("ChunkServer: No supported event of given type");
 				break;
@@ -121,8 +126,33 @@ public class ChunkServer implements Server{
 		}
 	}
 
-	private void readFile(String filename) {
+	private void handleFileReadRequest(ChunkReadRequest request, Socket socket) {
+		System.out.println("Reading file: " + request.getFilename());
+		byte[] chunk = readFile(request.getFilename());
+		try {
 
+			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
+			sender.sendData(new ChunkReadResponse(chunk, request.getFilename()).getBytes());
+			sender.flush();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+	}
+
+	private byte[] readFile(String filename) {
+		byte[] bytes = null;
+		try {
+			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "r");
+			if(raFile.length() <= 1024 * 64) {
+				bytes = new byte[(int)raFile.length()];
+				raFile.readFully(bytes);
+			}
+		}catch(FileNotFoundException fnfe) {
+			fnfe.printStackTrace();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+		return bytes;
 	}
 
 	private void forwardChunk(ChunkWriteRequest request) {
