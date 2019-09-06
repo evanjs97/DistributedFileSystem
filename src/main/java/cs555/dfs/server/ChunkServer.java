@@ -91,8 +91,12 @@ public class ChunkServer implements Server{
 		}
 	}
 
+
 	private void writeChunk(ChunkWriteRequest request) {
 		byte[] chunk = request.getChunkData();
+
+
+
 		String filename = request.getFilename();
 		LinkedList<ChunkUtil> locations = request.getLocations();
 		writeFile(request.getChunkData(), request.getFilename());
