@@ -60,6 +60,7 @@ public class TCPFileSender implements Runnable{
 				if(!senders.containsKey(dest))
 					senders.put(dest, new TCPSender(new Socket(dest.getHostname(), dest.getPort())));
 				TCPSender sender = senders.get(dest);
+				file.readFully(chunk);
 
 				ChunkWriteRequest request = new ChunkWriteRequest(locations,this.filename+"_chunk_"+i, chunk);
 				sender.sendData(request.getBytes());

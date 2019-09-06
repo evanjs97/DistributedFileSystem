@@ -63,6 +63,7 @@ public class ClientServer implements Server{
 		}
 	}
 	private void handleChunkReadResponse(ChunkReadResponse response) {
+		System.out.println("Received bytes from chunk server of length: " + response.getChunk().length);
 		reader.addFileBytes(response.getChunk());
 	}
 
