@@ -8,11 +8,12 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 public class HeartbeatTask{
 	private final String destHost;
 	private final int destPort;
-	private final List<String> files;
+	private final Set<String> files;
 	private final ChunkServer server;
 	private final Event.Type type;
 	private final String BASE_DIR;

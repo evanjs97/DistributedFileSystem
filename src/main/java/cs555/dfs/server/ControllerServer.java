@@ -9,12 +9,13 @@ import cs555.dfs.util.FileMetadata;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class ControllerServer implements Server{
 
 
 //	HashSet<ChunkUtil> chunkServerMapping = new HashSet<>();
-	HashMap<String, ChunkUtil> fileToServer = new HashMap<>();
+	HashMap<String, List<ChunkUtil>> fileToServers = new HashMap<>();
 	HashMap<String, ChunkUtil> hostToServerObject = new HashMap<>();
 	SortedSet<ChunkUtil> chunkServers = new TreeSet<>();
 	private final int replicationLevel = 3;
@@ -70,18 +71,34 @@ public class ControllerServer implements Server{
 		for(FileMetadata metadata : heartbeat.getFileInfo()) {
 			ChunkUtil chunkUtil = hostToServerObject.get(socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort());
 			if(chunkUtil != null) {
-				fileToServer.put(metadata.getFilename(), chunkUtil);
+				fileToServers.putIfAbsent(metadata.getFilename(), new ArrayList<ChunkUtil>());
+				fileToServers.get(metadata.getFilename()).add(chunkUtil);
 			}else {
 				System.err.println("Error: Chunk server is not registered");
 			}
 		}
 	}
 
+	/**
+	 * handleChunkLocation request method handles incoming requests from nodes to locate given file
+	 * if file cant be found, or if file can only be found on the machine that sent the request a failed response is sent
+	 * otherwise a successful response is sent containing the hostname and port of the chunk server hosting the file
+	 * @param request the request
+	 * @param socket the socket the request was received over
+	 */
 	private void handleChunkLocationRequest(ChunkLocationRequest request, Socket socket) {
 		System.out.println(request.getFilename());
-		ChunkUtil util = fileToServer.get(request.getFilename());
+		List<ChunkUtil> fileServers = fileToServers.get(request.getFilename());
+		int random = ThreadLocalRandom.current().nextInt(0, fileServers.size());
+		ChunkUtil util = fileServers.get(random);
+		if(util.getHostname().equals(socket.getInetAddress().getCanonicalHostName()) && util.getPort() == socket.getLocalPort()) {
+			if(fileServers.size() <= 1) util = null;
+			else if(random == 0) util = fileServers.get(random+1);
+			else util = fileServers.get(random-1);
+		}
+
 		try {
-			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getHostName(), request.getPort()));
+			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
 			if(util != null) {
 				System.out.println("Controller: Found chunk location for " + request.getFilename());
 				sender.sendData(new ChunkLocationResponse(util.getHostname(), util.getPort(), true, request.getFilename()).getBytes());

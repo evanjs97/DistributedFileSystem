@@ -63,7 +63,13 @@ public class ClientServer implements Server{
 		}
 	}
 	private void handleChunkReadResponse(ChunkReadResponse response) {
-		System.out.println("Received bytes from chunk server of length: " + response.getChunk().length);
+		if(response.isSuccess()) {
+			System.out.println("Received bytes from chunk server of length: " + response.getChunk().length);
+		}else {
+			System.out.println("Failed to retrieve file from chunk server\n" +
+					"Chunk Server detected corruption for file: " + response.getFilename()
+					+ " in chunks: " + response.getCorruptions().toString());
+		}
 		reader.addFileBytes(response.getChunk());
 	}
 

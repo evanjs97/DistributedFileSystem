@@ -42,6 +42,10 @@ public class TCPFileReader {
 			for(long i = 0; i < numChunks; i++) {
 				try {
 					byte[] chunk = chunks.poll(10000, TimeUnit.MILLISECONDS);
+					if(chunk == null) {
+						file.close();
+						return;
+					}
 					file.write(chunk);
 					System.out.println("Finished Writing Chunk");
 				}catch(InterruptedException ie) {
@@ -52,7 +56,6 @@ public class TCPFileReader {
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
-
 	}
 
 
