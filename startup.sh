@@ -6,12 +6,13 @@ SERVER="juneau"
 PORT="45467"
 CLIENT="raleigh"
 CHUNK_SERVERS_PER_MACHINE=1
+CHUNK_DIR="/tmp/evanjs"
 
 gnome-terminal --geometry=132x43 -e "ssh -t ${SERVER} 'cd ${HOME}/build/classes/java/main; java cs555.dfs.server.ControllerServer ${PORT};bash;'"
 gnome-terminal --geometry=132x43 -e "ssh -t ${CLIENT} 'cd ${HOME}/build/classes/java/main; java cs555.dfs.server.ClientServer ${SERVER} ${PORT};bash;'"
 
 
-SCRIPT="cd ${HOME}/build/classes/java/main; java cs555.dfs.server.ChunkServer ${SERVER} ${PORT};"
+SCRIPT="cd ${HOME}/build/classes/java/main; java cs555.dfs.server.ChunkServer ${SERVER} ${PORT} ${CHUNK_DIR};"
 COMMAND="gnome-terminal"
 sleep 3
 for i in `cat machine_list`; do

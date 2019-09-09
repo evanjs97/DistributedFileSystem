@@ -7,10 +7,7 @@ import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
 import cs555.dfs.util.Heartbeat;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.net.Socket;
 import java.security.DigestException;
 import java.security.NoSuchAlgorithmException;
@@ -21,16 +18,16 @@ public class ChunkServer implements Server{
 	private final String hostname;
 	private final int hostPort;
 	private int port;
-//	private final List<String> files = new LinkedList<>();
 	private final HashMap<String, List<String>> fileChecksums = new HashMap<>();
 	private final HashMap<String, List<Integer>> fileToCorruptions = new HashMap<>();
 	private final Set<String> newFiles = new HashSet<>();
 
-	private static final String BASE_DIR = "/tmp";
+	private final String BASE_DIR;
 
-	public ChunkServer(String hostname, int port) {
+	public ChunkServer(String hostname, int port, String dataDir) {
 		this.hostname = hostname;
 		this.hostPort = port;
+		this.BASE_DIR = dataDir;
 	}
 
 	public Set<String> getRecentFiles() {
@@ -38,7 +35,6 @@ public class ChunkServer implements Server{
 	}
 
 	public Set<String> getAllFiles() {
-//		return new LinkedList<>(filepathToName.values());
 		return this.fileChecksums.keySet();
 	}
 
@@ -85,7 +81,15 @@ public class ChunkServer implements Server{
 				writeChunk((ChunkWriteRequest) event);
 				break;
 			case CHUNK_READ_REQUEST:
-				handleFileReadRequest((ChunkReadRequest) event, socket);
+				ChunkReadRequest request = (ChunkReadRequest) event;
+				handleFileReadRequest(request, socket);
+				break;
+			case CHUNK_READ_RESPONSE:
+				handleChunkReadResponse((ChunkReadResponse) event);
+				break;
+			case CHUNK_LOCATION_RESPONSE:
+				handleChunkLocationResponse((ChunkLocationResponse) event);
+				break;
 			default:
 				System.err.println("ChunkServer: No supported event of given type");
 				break;
@@ -118,7 +122,6 @@ public class ChunkServer implements Server{
 				newFiles.add(filename);
 			}
 			synchronized (fileChecksums) {
-//				filepathToName.put(filename, shortName);
 				fileChecksums.put(filename, ChunkUtil.getChecksums(chunk));
 				System.out.println("Writing Checksums");
 				for(String checksum : fileChecksums.get(filename)) {
@@ -134,15 +137,46 @@ public class ChunkServer implements Server{
 
 	private void handleFileReadRequest(ChunkReadRequest request, Socket socket) {
 		System.out.println("Reading file: " + request.getFilename());
-		FileRead chunkRead= readFile(request.getFilename());
-		if(!chunkRead.corruptions.isEmpty()) {
-			synchronized (fileToCorruptions) {
-				fileToCorruptions.put(request.getFilename(), chunkRead.corruptions);
-			}
-		}
+		FileRead chunkRead = null;
+		if(request.getChunkSlices().isEmpty()) {
+			chunkRead = readFile(request.getFilename());
+		}else chunkRead = readFile(request.getFilename(), request.getChunkSlices());
+
 		try {
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
 			sender.sendData(new ChunkReadResponse(chunkRead.bytes, request.getFilename(), chunkRead.corruptions).getBytes());
+			sender.flush();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+		if(!chunkRead.corruptions.isEmpty()) {
+			repairCorruptFile(request.getFilename(), chunkRead.corruptions);
+		}
+	}
+
+	private void handleChunkReadResponse(ChunkReadResponse response) {
+		if(response.getCorruptions().isEmpty()) {
+			System.out.println("Chunk Server: Repairing file corruption: " + response.getFilename());
+			byte[] validChunk = response.getChunk();
+			List<Integer> slices = fileToCorruptions.get(response.getFilename());
+			try {
+				RandomAccessFile raFile = new RandomAccessFile(response.getFilename(), "rw");
+				for(Integer slice : slices) {
+					raFile.seek(slice);
+				}
+			}catch(FileNotFoundException fnfe) {
+				fnfe.printStackTrace();
+			}
+		}else {
+			System.out.println("Chunk Server: Unable to repair corruption");
+		}
+	}
+
+	private void handleChunkLocationResponse(ChunkLocationResponse response) {
+		try {
+			TCPSender sender = new TCPSender(new Socket(response.getHostname(), response.getPort()));
+			sender.sendData(new ChunkReadRequest(response.getFilename(),
+					port, fileToCorruptions.get(response.getFilename())).getBytes());
 			sender.flush();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
@@ -151,6 +185,9 @@ public class ChunkServer implements Server{
 
 	private void repairCorruptFile(String filename, List<Integer> corruptSections) {
 		try {
+			synchronized (fileToCorruptions) {
+				fileToCorruptions.put(filename, corruptSections);
+			}
 			TCPSender sender = new TCPSender(new Socket(hostname, hostPort));
 			sender.sendData(new ChunkLocationRequest(filename, port).getBytes());
 			sender.flush();
@@ -169,23 +206,57 @@ public class ChunkServer implements Server{
 		}
 	}
 
+	private FileRead readFile(String filename, List<Integer> slices) {
+		byte[] bytes = null;
+		List<Integer> corruptions = new LinkedList<>();
+		try {
+			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "r");
+			bytes = new byte[(int)raFile.length()];
+			ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
+			DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
+
+			List<String> checkSums = fileChecksums.get(filename);
+
+			for(int i = 0; i < slices.size(); i++) {
+				int offset = slices.get(i);
+				int offsetLength = Math.min(8 * 1024, (int) raFile.length() - offset);
+				byte[] arr = new byte[offsetLength];
+				raFile.read(arr, offset, offsetLength);
+
+				int checkIndex = (offset / (8 * 1024)) -1;
+				if(isCorrupt(checkSums.get(checkIndex), bytes, offset, offsetLength)) corruptions.add(offset);
+
+				dout.write(arr);
+			}
+			dout.flush();
+			bytes = baOutStream.toByteArray();
+			baOutStream.close();
+			dout.close();
+		}catch(FileNotFoundException fnfe) {
+			fnfe.printStackTrace();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+		return new FileRead(bytes, corruptions);
+	}
+
 	private FileRead readFile(String filename) {
 		byte[] bytes = null;
 		List<Integer> corruptions = new LinkedList<>();
 		try {
 			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "r");
 			bytes = new byte[(int)raFile.length()];
-			List<String> checksums = fileChecksums.get(filename);
+			List<String> checkSums = fileChecksums.get(filename);
 
 			int offset = 0;
 			int bytesRemaining = (int)raFile.length();
 
-			for(int i = 0; i < checksums.size(); i++) {
+			for(int i = 0; i < checkSums.size(); i++) {
 				int checksumLength = 8 * 1024;
 				if(checksumLength > bytesRemaining) checksumLength = bytesRemaining;
 				raFile.read(bytes, offset, checksumLength);
 
-				if(isCorrupt(checksums.get(i), bytes, offset, checksumLength)) corruptions.add(i);
+				if(isCorrupt(checkSums.get(i), bytes, offset, checksumLength)) corruptions.add(offset);
 				offset += checksumLength;
 				bytesRemaining -= checksumLength;
 			}
@@ -222,14 +293,15 @@ public class ChunkServer implements Server{
 	}
 
 	public static void main(String[] args) {
-		if(args.length < 2) {
-			System.err.println("ChunkServer: Error must specify at least 2 arguments");
+		if(args.length < 3) {
+			System.err.println("ChunkServer: Error must specify at least 3 arguments");
 			System.exit(1);
 		}
 		try {
 			String hostname = args[0];
 			int port = Integer.parseInt(args[1]);
-			ChunkServer chunkServer = new ChunkServer(hostname, port);
+			String dataDir = args[2];
+			ChunkServer chunkServer = new ChunkServer(hostname, port, dataDir);
 			chunkServer.init();
 		}catch(NumberFormatException nfe) {
 			System.err.println("ChunkServer: Error invalid port, must be number in range 1024-65535");
