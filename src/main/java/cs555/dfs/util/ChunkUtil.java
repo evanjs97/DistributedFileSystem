@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ChunkUtil implements Comparable<ChunkUtil>{
-	private AtomicInteger assignedChunks = new AtomicInteger(0);
+	private int assignedChunks = 0;
 	private final String hostname;
 	private final int port;
 
@@ -20,11 +20,11 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 	}
 
 	public int getAssignedChunks() {
-		return assignedChunks.get();
+		return assignedChunks;
 	}
 
 	public void incrementAssignedChunks() {
-		this.assignedChunks.incrementAndGet();
+		this.assignedChunks++;
 	}
 
 	public String getHostname() {
@@ -50,8 +50,8 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 
 	@Override
 	public int compareTo(ChunkUtil other) {
-		int thisChunk = this.assignedChunks.get();
-		int otherChunk = other.assignedChunks.get();
+		int thisChunk = this.assignedChunks;
+		int otherChunk = other.assignedChunks;
 		if(thisChunk != otherChunk) return Integer.compare(thisChunk, otherChunk);
 		int host = this.hostname.compareTo(other.hostname);
 		if(host != 0) return host;

@@ -15,7 +15,7 @@ public class ControllerServer implements Server{
 
 	private final HashMap<String, List<ChunkUtil>> fileToServers = new HashMap<>();
 	private final HashMap<String, ChunkUtil> hostToServerObject = new HashMap<>();
-	private final SortedSet<ChunkUtil> chunkServers = new TreeSet<>();
+	private final TreeSet<ChunkUtil> chunkServers = new TreeSet<>();
 	private final int replicationLevel = 3;
 	private final int port;
 
@@ -32,13 +32,12 @@ public class ControllerServer implements Server{
 	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 		synchronized (chunkServers) {
-			Iterator<ChunkUtil> iter = chunkServers.iterator();
+//			Iterator<ChunkUtil> iter = chunkServers.iterator();
 			for(int i = 0; i < replicationLevel; i++) {
-				if(iter.hasNext()) {
-					ChunkUtil chunk = iter.next();
-					chunk.incrementAssignedChunks();
-					replicationServers.add(chunk);
-				}
+				ChunkUtil chunk = chunkServers.pollFirst();
+				chunk.incrementAssignedChunks();
+				replicationServers.add(chunk);
+				chunkServers.add(chunk);
 			}
 		}
 		try {
