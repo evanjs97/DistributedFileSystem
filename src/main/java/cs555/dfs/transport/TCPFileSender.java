@@ -2,11 +2,11 @@ package cs555.dfs.transport;
 
 import cs555.dfs.messaging.ChunkWriteRequest;
 import cs555.dfs.util.ChunkUtil;
-import sun.security.krb5.internal.crypto.Des;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -18,7 +18,7 @@ public class TCPFileSender implements Runnable{
 	private HashMap<ChunkUtil, TCPSender> senders = new HashMap<>();
 	private final String filename;
 	private final RandomAccessFile file;
-	private long bytesRemaining;
+	private final long fileSize;
 	private final long numChunks;
 	private final int bufferSize = 64 * 1024;
 
@@ -26,9 +26,9 @@ public class TCPFileSender implements Runnable{
 	public TCPFileSender(String filename) throws IOException{
 		this.filename = filename;
 		file = new RandomAccessFile(filename, "r");
-		bytesRemaining = file.length();
-		long temp = bytesRemaining / bufferSize;
-		if(bytesRemaining % bufferSize != 0) temp++;
+		fileSize = file.length();
+		long temp = fileSize / bufferSize;
+		if(fileSize % bufferSize != 0) temp++;
 		numChunks = temp;
 	}
 
@@ -45,7 +45,9 @@ public class TCPFileSender implements Runnable{
 
 		try {
 
-
+			long bytesRemaining = fileSize;
+			System.out.println("Sending " + numChunks + " chunks");
+			System.out.println("Total file size: " + fileSize);
 			for(long i = 0; i < numChunks; i++) {
 				byte[] chunk;
 				if(bytesRemaining >= bufferSize) {
@@ -65,7 +67,9 @@ public class TCPFileSender implements Runnable{
 				ChunkWriteRequest request = new ChunkWriteRequest(locations,this.filename+"_chunk_"+i, chunk);
 				sender.sendData(request.getBytes());
 				sender.flush();
+				bytesRemaining-=chunk.length;
 			}
+			System.out.println("Finished Sending File");
 		}catch(InterruptedException ie) {
 			System.out.println("Interrupted while waiting for server to send chunk server locations: timeout");
 		}catch(IOException ioe) {

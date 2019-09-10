@@ -33,8 +33,11 @@ public class TCPFileReader {
 	}
 
 	public void addFileBytes(byte[] bytes) {
-		System.out.println("Adding Bytes");
-		chunks.add(bytes);
+		if(bytes != null) {
+			chunks.add(bytes);
+		}else {
+			chunks.add(new byte[0]);
+		}
 	}
 
 	public void readFile() {
@@ -42,12 +45,11 @@ public class TCPFileReader {
 			for(long i = 0; i < numChunks; i++) {
 				try {
 					byte[] chunk = chunks.poll(10000, TimeUnit.MILLISECONDS);
-					if(chunk == null) {
+					if(chunk.length == 0) {
 						file.close();
 						return;
 					}
 					file.write(chunk);
-					System.out.println("Finished Writing Chunk");
 				}catch(InterruptedException ie) {
 					ie.printStackTrace();
 				}

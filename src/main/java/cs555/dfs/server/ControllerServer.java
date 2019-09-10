@@ -13,11 +13,9 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class ControllerServer implements Server{
 
-
-//	HashSet<ChunkUtil> chunkServerMapping = new HashSet<>();
-	HashMap<String, List<ChunkUtil>> fileToServers = new HashMap<>();
-	HashMap<String, ChunkUtil> hostToServerObject = new HashMap<>();
-	SortedSet<ChunkUtil> chunkServers = new TreeSet<>();
+	private final HashMap<String, List<ChunkUtil>> fileToServers = new HashMap<>();
+	private final HashMap<String, ChunkUtil> hostToServerObject = new HashMap<>();
+	private final SortedSet<ChunkUtil> chunkServers = new TreeSet<>();
 	private final int replicationLevel = 3;
 	private final int port;
 
@@ -35,7 +33,6 @@ public class ControllerServer implements Server{
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 		synchronized (chunkServers) {
 			Iterator<ChunkUtil> iter = chunkServers.iterator();
-			System.out.println(chunkServers.size());
 			for(int i = 0; i < replicationLevel; i++) {
 				if(iter.hasNext()) {
 					ChunkUtil chunk = iter.next();
@@ -45,7 +42,7 @@ public class ControllerServer implements Server{
 			}
 		}
 		try {
-			System.out.println("Controller: Sending chunk location response");
+//			System.out.println("Controller: Sending chunk location response");
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getHostName(), request.getPort()));
 			sender.sendData(new ChunkDestinationResponse(replicationServers).getBytes());
 			sender.flush();
@@ -57,8 +54,12 @@ public class ControllerServer implements Server{
 	private void registerChunkServer(RegisterRequest request) {
 		System.out.println("Controller: Received register request from " + request.getHostname() + ":" + request.getPort());
 		ChunkUtil chunkUtil = new ChunkUtil(request.getHostname(), request.getPort());
-		this.chunkServers.add(chunkUtil);
-		this.hostToServerObject.put(request.getHostname()+":"+request.getPort(), chunkUtil);
+		synchronized (chunkServers) {
+			this.chunkServers.add(chunkUtil);
+		}
+		synchronized (hostToServerObject) {
+			this.hostToServerObject.put(request.getHostname() + ":" + request.getPort(), chunkUtil);
+		}
 	}
 
 	private void handleMajorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
@@ -69,10 +70,15 @@ public class ControllerServer implements Server{
 	private void handleMinorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
 		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort());
 		for(FileMetadata metadata : heartbeat.getFileInfo()) {
-			ChunkUtil chunkUtil = hostToServerObject.get(socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort());
+			ChunkUtil chunkUtil;
+			synchronized (hostToServerObject) {
+				chunkUtil = hostToServerObject.get(socket.getInetAddress().getCanonicalHostName() + ":" + heartbeat.getPort());
+			}
 			if(chunkUtil != null) {
-				fileToServers.putIfAbsent(metadata.getFilename(), new ArrayList<ChunkUtil>());
-				fileToServers.get(metadata.getFilename()).add(chunkUtil);
+				synchronized (fileToServers) {
+					fileToServers.putIfAbsent(metadata.getFilename(), new ArrayList<>());
+					fileToServers.get(metadata.getFilename()).add(chunkUtil);
+				}
 			}else {
 				System.err.println("Error: Chunk server is not registered");
 			}
@@ -87,8 +93,11 @@ public class ControllerServer implements Server{
 	 * @param socket the socket the request was received over
 	 */
 	private void handleChunkLocationRequest(ChunkLocationRequest request, Socket socket) {
-		System.out.println(request.getFilename());
-		List<ChunkUtil> fileServers = fileToServers.get(request.getFilename());
+		System.out.println("Chunk Server: Receieved chunk location request for: "+request.getFilename());
+		List<ChunkUtil> fileServers;
+		synchronized (fileToServers) {
+			fileServers = fileToServers.get(request.getFilename());
+		}
 		int random = ThreadLocalRandom.current().nextInt(0, fileServers.size());
 		ChunkUtil util = fileServers.get(random);
 		if(util.getHostname().equals(socket.getInetAddress().getCanonicalHostName()) && util.getPort() == socket.getLocalPort()) {
@@ -100,7 +109,7 @@ public class ControllerServer implements Server{
 		try {
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
 			if(util != null) {
-				System.out.println("Controller: Found chunk location for " + request.getFilename());
+				System.out.println("Controller: Found chunk server location for " + request.getFilename());
 				sender.sendData(new ChunkLocationResponse(util.getHostname(), util.getPort(), true, request.getFilename()).getBytes());
 				sender.flush();
 
@@ -118,7 +127,6 @@ public class ControllerServer implements Server{
 	public void onEvent(Event event, Socket socket) {
 		switch (event.getType()) {
 			case CHUNK_DESTINATION_REQUEST:
-				System.out.println("Controller: Received chunk destination request");
 				sendAvailableServers((ChunkDestinationRequest) event, socket);
 				break;
 			case REGISTER_REQUEST:

@@ -23,4 +23,10 @@ public class TCPSender {
 	public synchronized void flush() throws IOException {
 		dout.flush();
 	}
+
+	public synchronized void close() throws IOException{
+		dout.flush();
+		dout.close();
+		socket.close();
+	}
 }

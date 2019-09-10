@@ -5,6 +5,7 @@ import cs555.dfs.messaging.EventFactory;
 import cs555.dfs.server.Server;
 
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
 
@@ -33,7 +34,7 @@ public class TCPReceiver implements Runnable {
 	@Override
 	public void run() {
 		int dataLength = 0;
-		while (socket != null) {
+		while (socket != null && socket.isConnected()) {
 			try {
 				dataLength = din.readInt();
 
@@ -42,8 +43,9 @@ public class TCPReceiver implements Runnable {
 
 				Event event = EventFactory.getInstance().getEvent(data);
 				server.onEvent(event, socket);
+			} catch(EOFException eofe) {
 				break;
-			} catch (IOException ioe) {
+			} catch(IOException ioe) {
 				System.err.println("TCPReceiver: Error while reading from socket");
 				ioe.printStackTrace();
 			} catch(NegativeArraySizeException ne) {
