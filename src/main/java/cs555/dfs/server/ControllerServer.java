@@ -41,7 +41,6 @@ public class ControllerServer implements Server{
 			}
 		}
 		try {
-//			System.out.println("Controller: Sending chunk location response");
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getHostName(), request.getPort()));
 			sender.sendData(new ChunkDestinationResponse(replicationServers).getBytes());
 			sender.flush();
@@ -108,7 +107,6 @@ public class ControllerServer implements Server{
 		try {
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
 			if(util != null) {
-				System.out.println("Controller: Found chunk server location for " + request.getFilename());
 				sender.sendData(new ChunkLocationResponse(util.getHostname(), util.getPort(), true, request.getFilename()).getBytes());
 				sender.flush();
 

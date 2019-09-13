@@ -108,13 +108,13 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 		return builder.toString();
 	}
 
-	public static List<Integer> getCorruptionsFromChecksums(List<String> check1, List<String> check2) {
-		List<Integer> corruptions = new ArrayList<>();
+	public static boolean getCorruptedFromChecksums(List<String> check1, List<String> check2) {
 		for(int i = 0; i < check1.size(); i++) {
 			if(!check1.get(i).equals(check2.get(i))) {
-				corruptions.add(i * 8 * 1024);
+				System.out.println("Found corrupted chunk");
+				return true;
 			}
 		}
-		return corruptions;
+		return false;
 	}
 }

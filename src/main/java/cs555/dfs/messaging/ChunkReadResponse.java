@@ -11,8 +11,7 @@ public class ChunkReadResponse implements Event{
 	private final byte[] chunk;
 	private final String filename;
 	private final boolean success;
-	private final List<Integer> corruptions;
-	private final int chunkSize;
+//	private final int chunkSize;
 
 	@Override
 	public final Type getType() {
@@ -29,9 +28,7 @@ public class ChunkReadResponse implements Event{
 
 	public final boolean isSuccess() { return success; }
 
-	public final List<Integer> getCorruptions() { return corruptions; }
-
-	public final int getChunkSize() { return chunkSize; }
+//	public final int getChunkSize() { return chunkSize; }
 
 	@Override
 	public byte[] getBytes() throws IOException {
@@ -43,16 +40,10 @@ public class ChunkReadResponse implements Event{
 		dout.writeInt(getType().getValue());
 
 		dout.writeBoolean(success);
-		dout.writeInt(chunkSize);
 
 		if(success) {
 			dout.writeInt(chunk.length);
 			dout.write(chunk);
-		}else {
-			dout.writeInt(corruptions.size());
-			for(Integer i : corruptions) {
-				dout.writeInt(i);
-			}
 		}
 
 		byte[] nameBytes = filename.getBytes();
@@ -67,36 +58,26 @@ public class ChunkReadResponse implements Event{
 		return marshalledData;
 	}
 
-	public ChunkReadResponse(byte[] bytes, String filename, List<Integer> corruptions, int chunkSize) {
+	public ChunkReadResponse(byte[] bytes, String filename, boolean success) {
 		this.chunk = bytes;
 		this.filename = filename;
-		this.success = corruptions.isEmpty();
-		this.corruptions = Collections.unmodifiableList(corruptions);
-		this.chunkSize = chunkSize;
+		this.success = success;
+//		this.chunkSize = chunkSize;
 	}
 
 	public ChunkReadResponse(DataInputStream din) {
 		byte[] chunk = null;
 		String filename = "";
 		boolean success = true;
-		List<Integer> corruptions = new LinkedList<>();
-		int length = 0;
 
 		try{
 			success = din.readBoolean();
-			length = din.readInt();
 
 			if(success) {
 				int chunkSize = din.readInt();
 				chunk = new byte[chunkSize];
 				din.readFully(chunk);
-			}else {
-				int corruptionsLength = din.readInt();
-				for(int i = 0; i < corruptionsLength; i++) {
-					corruptions.add(din.readInt());
-				}
 			}
-
 			int nameLength = din.readInt();
 			byte[] nameBytes = new byte[nameLength];
 			din.readFully(nameBytes);
@@ -110,8 +91,6 @@ public class ChunkReadResponse implements Event{
 		this.chunk = chunk;
 		this.filename = filename;
 		this.success = success;
-		this.corruptions = corruptions;
-		this.chunkSize = length;
 //		System.out.println(filename + " " + success + " " + length + " ");
 	}
 

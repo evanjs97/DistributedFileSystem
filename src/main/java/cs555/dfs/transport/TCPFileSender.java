@@ -17,19 +17,22 @@ public class TCPFileSender implements Runnable{
 	private ArrayBlockingQueue<LinkedList<ChunkUtil>> availableLocations = new ArrayBlockingQueue<>(1000);
 	private HashMap<ChunkUtil, TCPSender> senders = new HashMap<>();
 	private final String filename;
+	private final String destination;
 	private final RandomAccessFile file;
 	private final long fileSize;
 	private final long numChunks;
 	private final int bufferSize = 64 * 1024;
 
 
-	public TCPFileSender(String filename) throws IOException{
+	public TCPFileSender(String filename, String destination) throws IOException{
 		this.filename = filename;
 		file = new RandomAccessFile(filename, "r");
 		fileSize = file.length();
 		long temp = fileSize / bufferSize;
 		if(fileSize % bufferSize != 0) temp++;
 		numChunks = temp;
+
+		this.destination = destination;
 	}
 
 	public long getNumChunks() {
@@ -64,7 +67,7 @@ public class TCPFileSender implements Runnable{
 				TCPSender sender = senders.get(dest);
 				file.readFully(chunk);
 
-				ChunkWriteRequest request = new ChunkWriteRequest(locations,this.filename+"_chunk_"+i, chunk);
+				ChunkWriteRequest request = new ChunkWriteRequest(locations,this.destination+"_chunk_"+i, chunk);
 				sender.sendData(request.getBytes());
 				sender.flush();
 				bytesRemaining-=chunk.length;

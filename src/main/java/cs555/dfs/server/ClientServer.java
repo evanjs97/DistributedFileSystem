@@ -31,7 +31,7 @@ public class ClientServer implements Server{
 				handleChunkDestinationResponse((ChunkDestinationResponse) event);
 				break;
 			case CHUNK_LOCATION_RESPONSE:
-				handleChunkLocationResponse((ChunkLocationResponse) event);
+				MessagingUtil.handleChunkLocationResponse((ChunkLocationResponse) event, port);
 				break;
 			case CHUNK_READ_RESPONSE:
 				handleChunkReadResponse((ChunkReadResponse) event);
@@ -50,23 +50,10 @@ public class ClientServer implements Server{
 		}
 	}
 
-	private void handleChunkLocationResponse(ChunkLocationResponse response) {
-//		System.out.println("Client: Received chunk location: " + response.getHostname() + ":" + response.getPort());
-		try {
-			TCPSender sender = new TCPSender(new Socket(response.getHostname(), response.getPort()));
-			sender.sendData(new ChunkReadRequest(response.getFilename(), port).getBytes());
-			sender.close();
-		}catch(IOException ioe) {
-			ioe.printStackTrace();
-		}
-	}
 	private void handleChunkReadResponse(ChunkReadResponse response) {
-		if(response.isSuccess()) {
-			//System.out.println("Received bytes from chunk server of length: " + response.getChunk().length);
-		}else {
+		if(!response.isSuccess()) {
 			System.out.println("Failed to retrieve file from chunk server\n" +
-					"Chunk Server detected corruption for file: " + response.getFilename()
-					+ " in chunks: " + response.getCorruptions().toString());
+					"Chunk Server detected corruption for file: " + response.getFilename());
 		}
 		reader.addFileBytes(response.getChunk());
 	}
@@ -77,13 +64,13 @@ public class ClientServer implements Server{
 			while(scan.hasNextLine()) {
 				String[] input = scan.nextLine().split("\\s+");
 				switch(input[0]) {
-					case "upload":
-						if(input.length < 2) {
-							System.err.println("Error: upload must specify filename");
+					case "put":
+						if(input.length < 3) {
+							System.err.println("Error: upload must specify filename and destination path");
 							break;
 						}
 						else {
-							requestChunkDestinations(input[1]);
+							requestChunkDestinations(input[1], input[2]);
 						}
 						break;
 					case "get":
@@ -103,23 +90,26 @@ public class ClientServer implements Server{
 		}
 	}
 
-	private void requestChunkDestinations(String filename) {
+	private void requestChunkDestinations(String filename, String destination) {
 		try {
 			Socket socket = new Socket(controllerHostname, controllerPort);
 			TCPSender sender = new TCPSender(socket);
 
-			TCPFileSender fileSender = new TCPFileSender(filename);
+			if(filename.contains("/")) {
+				destination += filename.substring(filename.lastIndexOf('/')+1);
+			}
+			System.out.println("File destination is: " + destination);
+
+			TCPFileSender fileSender = new TCPFileSender(filename, destination);
 			this.uploader = fileSender;
 
 			long numChunks = fileSender.getNumChunks();
 			Thread thread = new Thread(fileSender);
 			thread.start();
 
-			File f = new File(filename);
-
 			for(long i = 0; i < numChunks; i++) {
 				synchronized (filenameToChunks) {
-					this.filenameToChunks.put(f.getAbsolutePath(), numChunks);
+					this.filenameToChunks.put(destination, numChunks);
 				}
 				sender.sendData(new ChunkDestinationRequest(this.port).getBytes());
 				sender.flush();
