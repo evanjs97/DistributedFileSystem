@@ -168,11 +168,9 @@ public class ChunkServer implements Server{
 
 	private void repairCorruptFile(String filename) {
 		try {
-
 			TCPSender sender = new TCPSender(new Socket(hostname, hostPort));
-			sender.sendData(new ChunkLocationRequest(filename, port).getBytes());
-			sender.close();
-		}catch (IOException ioe) {
+			MessagingUtil.handleChunkLocationRequest(sender, filename, port);
+		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
 	}

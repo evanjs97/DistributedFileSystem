@@ -6,11 +6,8 @@ import cs555.dfs.transport.TCPFileSender;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.Socket;
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Scanner;
 
@@ -50,6 +47,12 @@ public class ClientServer implements Server{
 		}
 	}
 
+	/**
+	 * handleChunkReadResponse is responsible for dealing with incoming chunk data
+	 * 	this method will send the chunk data to the file reader which will write it to file
+	 * In the case of a file corruption on the chunk it will inform the client
+	 * @param response the response received from the chunk server
+	 */
 	private void handleChunkReadResponse(ChunkReadResponse response) {
 		if(!response.isSuccess()) {
 			System.out.println("Failed to retrieve file from chunk server\n" +
@@ -98,7 +101,6 @@ public class ClientServer implements Server{
 			if(filename.contains("/")) {
 				destination += filename.substring(filename.lastIndexOf('/')+1);
 			}
-			System.out.println("File destination is: " + destination);
 
 			TCPFileSender fileSender = new TCPFileSender(filename, destination);
 			this.uploader = fileSender;
@@ -134,8 +136,7 @@ public class ClientServer implements Server{
 			TCPSender sender = new TCPSender(socket);
 			reader = new TCPFileReader(filename, chunks, destination);
 			for (long i = 0; i < chunks; i++) {
-				sender.sendData(new ChunkLocationRequest(filename+"_chunk_"+i, port).getBytes());
-				sender.flush();
+				MessagingUtil.handleChunkLocationRequest(sender, filename+"_chunk_"+i, port);
 			}
 			reader.readFile();
 		}catch(IOException ioe) {

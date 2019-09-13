@@ -15,4 +15,12 @@ public class MessagingUtil {
 			ioe.printStackTrace();
 		}
 	}
+	public static void handleChunkLocationRequest(TCPSender sender, String filename, int localPort) {
+		try {
+			sender.sendData(new ChunkLocationRequest(filename, localPort).getBytes());
+			sender.flush();
+		}catch (IOException ioe) {
+			ioe.printStackTrace();
+		}
+	}
 }
