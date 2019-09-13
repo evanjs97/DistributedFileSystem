@@ -32,7 +32,6 @@ public class ControllerServer implements Server{
 	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 		synchronized (chunkServers) {
-//			Iterator<ChunkUtil> iter = chunkServers.iterator();
 			for(int i = 0; i < replicationLevel; i++) {
 				ChunkUtil chunk = chunkServers.pollFirst();
 				chunk.incrementAssignedChunks();

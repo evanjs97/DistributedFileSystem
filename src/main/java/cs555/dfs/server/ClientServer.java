@@ -39,6 +39,11 @@ public class ClientServer implements Server{
 		}
 	}
 
+	/**
+	 * Handles destination response from the controller
+	 * the locations list from the response is sent to the file uploader
+	 * @param response the response received from the controller
+	 */
 	private void handleChunkDestinationResponse(ChunkDestinationResponse response) {
 		if(uploader != null) {
 			uploader.addLocationList(response.getLocations());
@@ -93,6 +98,12 @@ public class ClientServer implements Server{
 		}
 	}
 
+	/**
+	 * Requests chunk destinations for input file from the controller server
+	 * Starts up file uploader to upload the chunks to chunk servers
+	 * @param filename the file to be uploaded
+	 * @param destination the file destination (on the chunk servers)
+	 */
 	private void requestChunkDestinations(String filename, String destination) {
 		try {
 			Socket socket = new Socket(controllerHostname, controllerPort);
@@ -126,6 +137,11 @@ public class ClientServer implements Server{
 		}
 	}
 
+	/**
+	 * Requests chunk locations for already uploaded file from the controller
+	 * @param filename the location of the file on the chunk server
+	 * @param destination the destination for the file on the client
+	 */
 	private void requestChunkLocations(String filename, String destination) {
 		Long chunks;
 		synchronized (filenameToChunks) {
@@ -151,6 +167,9 @@ public class ClientServer implements Server{
 		this.port = clientPort;
 	}
 
+	/**
+	 * Initializes client server on specified port
+	 */
 	private void init() {
 		TCPServer tcpServer = new TCPServer(port, this);
 		this.port = tcpServer.getLocalPort();

@@ -17,7 +17,6 @@ public class ChunkServer implements Server{
 	private final int hostPort;
 	private int port;
 	private final HashMap<String, List<String>> fileChecksums = new HashMap<>();
-//	private final HashMap<String, List<Integer>> fileToCorruptions = new HashMap<>();
 	private final Set<String> newFiles = new HashSet<>();
 
 	private final String BASE_DIR;

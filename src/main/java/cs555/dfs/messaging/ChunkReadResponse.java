@@ -11,7 +11,6 @@ public class ChunkReadResponse implements Event{
 	private final byte[] chunk;
 	private final String filename;
 	private final boolean success;
-//	private final int chunkSize;
 
 	@Override
 	public final Type getType() {
@@ -28,7 +27,6 @@ public class ChunkReadResponse implements Event{
 
 	public final boolean isSuccess() { return success; }
 
-//	public final int getChunkSize() { return chunkSize; }
 
 	@Override
 	public byte[] getBytes() throws IOException {
@@ -62,7 +60,6 @@ public class ChunkReadResponse implements Event{
 		this.chunk = bytes;
 		this.filename = filename;
 		this.success = success;
-//		this.chunkSize = chunkSize;
 	}
 
 	public ChunkReadResponse(DataInputStream din) {
@@ -91,7 +88,6 @@ public class ChunkReadResponse implements Event{
 		this.chunk = chunk;
 		this.filename = filename;
 		this.success = success;
-//		System.out.println(filename + " " + success + " " + length + " ");
 	}
 
 
