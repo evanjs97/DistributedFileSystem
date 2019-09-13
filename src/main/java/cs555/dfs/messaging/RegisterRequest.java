@@ -22,24 +22,9 @@ public class RegisterRequest implements Event{
 
 	@Override
 	public byte[] getBytes() throws IOException {
-		byte[] marshalledData;
-		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
-		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
-
-		dout.writeInt(getType().getValue());
-
-		byte[] hostBytes = hostname.getBytes();
-		dout.writeInt(hostBytes.length);
-		dout.write(hostBytes);
-
-		dout.writeInt(port);
-
-		dout.flush();
-		marshalledData = baOutStream.toByteArray();
-
-		baOutStream.close();
-		dout.close();
-		return marshalledData;
+		MessageMarshaller messageMarshaller = new MessageMarshaller();
+		messageMarshaller.marshallIntStringInt(getType().getValue(), hostname, port);
+		return messageMarshaller.getMarshalledData();
 	}
 
 	public RegisterRequest(String hostname, int port) {
@@ -48,15 +33,18 @@ public class RegisterRequest implements Event{
 	}
 
 	public RegisterRequest(DataInputStream din) {
+		MessageReader messageReader = new MessageReader(din);
+
 		String hostname = null;
 		int port = 0;
 		try {
-			int hostLength = din.readInt();
-			byte[] hostBytes = new byte[hostLength];
-			din.readFully(hostBytes);
-			hostname = new String(hostBytes);
+//			int hostLength = din.readInt();
+//			byte[] hostBytes = new byte[hostLength];
+//			din.readFully(hostBytes);
+			hostname = messageReader.readString();
 
-			port = din.readInt();
+			port = messageReader.readInt();
+			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}

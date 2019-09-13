@@ -1,6 +1,7 @@
 package cs555.dfs.messaging;
 
 import java.io.*;
+import java.time.Instant;
 
 public class ChunkLocationRequest implements Event{
 
@@ -22,25 +23,12 @@ public class ChunkLocationRequest implements Event{
 
 	@Override
 	public byte[] getBytes() throws IOException {
-		byte[] marshalledData;
-
-		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
-		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
-
-		dout.writeInt(getType().getValue());
-
-		byte[] nameBytes = filename.getBytes();
-		dout.writeInt(nameBytes.length);
-		dout.write(nameBytes);
-
-		dout.writeInt(port);
-
-		dout.flush();
-		marshalledData = baOutStream.toByteArray();
-		baOutStream.close();
-		dout.close();
-
-		return marshalledData;
+		MessageMarshaller messageMarshaller = new MessageMarshaller();
+		messageMarshaller.marshallIntStringInt(getType().getValue(), filename, port);
+		return messageMarshaller.getMarshalledData();
+//		messageMarshaller.writeInt(getType().getValue());
+//		messageMarshaller.writeString(filename);
+//		messageMarshaller.writeInt(port);
 
 	}
 

@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ClientServer implements Server{
 
@@ -17,7 +18,7 @@ public class ClientServer implements Server{
 	private final int controllerPort;
 	private int port;
 	private TCPFileSender uploader = null;
-	private HashMap<String, Long> filenameToChunks = new HashMap<>();
+	private ConcurrentHashMap<String, Long> filenameToChunks = new ConcurrentHashMap<>();
 	private TCPFileReader reader = null;
 
 
@@ -63,7 +64,8 @@ public class ClientServer implements Server{
 			System.out.println("Failed to retrieve file from chunk server\n" +
 					"Chunk Server detected corruption for file: " + response.getFilename());
 		}
-		reader.addFileBytes(response.getChunk());
+		int index = Integer.parseInt(response.getFilename().substring(response.getFilename().lastIndexOf('_')+1));
+		reader.addFileBytes(response.getChunk(), index);
 	}
 
 	private void handleUserInput() {
@@ -121,9 +123,7 @@ public class ClientServer implements Server{
 			thread.start();
 
 			for(long i = 0; i < numChunks; i++) {
-				synchronized (filenameToChunks) {
-					this.filenameToChunks.put(destination, numChunks);
-				}
+				this.filenameToChunks.put(destination, numChunks);
 				sender.sendData(new ChunkDestinationRequest(this.port).getBytes());
 				sender.flush();
 			}
@@ -143,10 +143,7 @@ public class ClientServer implements Server{
 	 * @param destination the destination for the file on the client
 	 */
 	private void requestChunkLocations(String filename, String destination) {
-		Long chunks;
-		synchronized (filenameToChunks) {
-			chunks = this.filenameToChunks.get(filename);
-		}
+		Long chunks = this.filenameToChunks.get(filename);
 		try {
 			Socket socket = new Socket(controllerHostname, controllerPort);
 			TCPSender sender = new TCPSender(socket);
@@ -154,7 +151,6 @@ public class ClientServer implements Server{
 			for (long i = 0; i < chunks; i++) {
 				MessagingUtil.handleChunkLocationRequest(sender, filename+"_chunk_"+i, port);
 			}
-			reader.readFile();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}

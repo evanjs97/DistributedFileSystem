@@ -9,13 +9,15 @@ import cs555.dfs.util.FileMetadata;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class ControllerServer implements Server{
 
-	private final HashMap<String, List<ChunkUtil>> fileToServers = new HashMap<>();
-	private final HashMap<String, ChunkUtil> hostToServerObject = new HashMap<>();
-	private final TreeSet<ChunkUtil> chunkServers = new TreeSet<>();
+	private final ConcurrentHashMap<String, List<ChunkUtil>> fileToServers = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ChunkUtil> hostToServerObject = new ConcurrentHashMap<>();
+	private final ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
 	private final int replicationLevel = 3;
 	private final int port;
 
@@ -31,14 +33,14 @@ public class ControllerServer implements Server{
 
 	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
-		synchronized (chunkServers) {
+//		synchronized (chunkServers) {
 			for(int i = 0; i < replicationLevel; i++) {
 				ChunkUtil chunk = chunkServers.pollFirst();
 				chunk.incrementAssignedChunks();
 				replicationServers.add(chunk);
 				chunkServers.add(chunk);
 			}
-		}
+//		}
 		try {
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getHostName(), request.getPort()));
 			sender.sendData(new ChunkDestinationResponse(replicationServers).getBytes());
@@ -51,12 +53,10 @@ public class ControllerServer implements Server{
 	private void registerChunkServer(RegisterRequest request) {
 		System.out.println("Controller: Received register request from " + request.getHostname() + ":" + request.getPort());
 		ChunkUtil chunkUtil = new ChunkUtil(request.getHostname(), request.getPort());
-		synchronized (chunkServers) {
+//		synchronized (chunkServers) {
 			this.chunkServers.add(chunkUtil);
-		}
-		synchronized (hostToServerObject) {
-			this.hostToServerObject.put(request.getHostname() + ":" + request.getPort(), chunkUtil);
-		}
+//		}
+		this.hostToServerObject.put(request.getHostname() + ":" + request.getPort(), chunkUtil);
 	}
 
 	private void handleMajorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
@@ -67,15 +67,10 @@ public class ControllerServer implements Server{
 	private void handleMinorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
 		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort());
 		for(FileMetadata metadata : heartbeat.getFileInfo()) {
-			ChunkUtil chunkUtil;
-			synchronized (hostToServerObject) {
-				chunkUtil = hostToServerObject.get(socket.getInetAddress().getCanonicalHostName() + ":" + heartbeat.getPort());
-			}
+			ChunkUtil chunkUtil = hostToServerObject.get(socket.getInetAddress().getCanonicalHostName() + ":" + heartbeat.getPort());
 			if(chunkUtil != null) {
-				synchronized (fileToServers) {
-					fileToServers.putIfAbsent(metadata.getFilename(), new ArrayList<>());
-					fileToServers.get(metadata.getFilename()).add(chunkUtil);
-				}
+				fileToServers.putIfAbsent(metadata.getFilename(), new ArrayList<>());
+				fileToServers.get(metadata.getFilename()).add(chunkUtil);
 			}else {
 				System.err.println("Error: Chunk server is not registered");
 			}
@@ -90,13 +85,11 @@ public class ControllerServer implements Server{
 	 * @param socket the socket the request was received over
 	 */
 	private void handleChunkLocationRequest(ChunkLocationRequest request, Socket socket) {
-		System.out.println("Chunk Server: Receieved chunk location request for: "+request.getFilename());
-		List<ChunkUtil> fileServers;
-		synchronized (fileToServers) {
-			fileServers = fileToServers.get(request.getFilename());
-		}
+		//System.out.println("Chunk Server: Receieved chunk location request for: "+request.getFilename());
+		List<ChunkUtil> fileServers = fileToServers.get(request.getFilename());
 		int random = ThreadLocalRandom.current().nextInt(0, fileServers.size());
 		ChunkUtil util = fileServers.get(random);
+
 		if(util.getHostname().equals(socket.getInetAddress().getCanonicalHostName()) && util.getPort() == socket.getLocalPort()) {
 			if(fileServers.size() <= 1) util = null;
 			else if(random == 0) util = fileServers.get(random+1);

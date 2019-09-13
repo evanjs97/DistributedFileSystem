@@ -5,18 +5,20 @@ import cs555.dfs.transport.TCPHeartbeat;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
+import cs555.dfs.util.FileMetadata;
 import cs555.dfs.util.Heartbeat;
 
 import java.io.*;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ChunkServer implements Server{
 
 	private final String hostname;
 	private final int hostPort;
 	private int port;
-	private final HashMap<String, List<String>> fileChecksums = new HashMap<>();
+	private final ConcurrentHashMap<String, List<String>> fileChecksums = new ConcurrentHashMap<>();
 	private final Set<String> newFiles = new HashSet<>();
 
 	private final String BASE_DIR;
@@ -32,9 +34,7 @@ public class ChunkServer implements Server{
 	}
 
 	public Set<String> getAllFiles() {
-		synchronized(fileChecksums) {
-			return this.fileChecksums.keySet();
-		}
+		return this.fileChecksums.keySet();
 	}
 
 	public final int getPort() {
@@ -116,7 +116,7 @@ public class ChunkServer implements Server{
 			forwardChunk(request);
 		}
 		writeFile(request.getChunkData(), request.getFilename());
-
+		FileMetadata.setLastModifiedTime(BASE_DIR+request.getFilename(), request.getLastModified());
 	}
 
 	/**
@@ -133,9 +133,8 @@ public class ChunkServer implements Server{
 
 			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "rw");
 			List<String> checkSums = ChunkUtil.getChecksums(chunk);
-			synchronized (fileChecksums) {
-				fileChecksums.put(filename, checkSums);
-			}
+			fileChecksums.put(filename, checkSums);
+
 			raFile.write(chunk);
 			raFile.setLength(chunk.length);
 			synchronized (newFiles) {
@@ -237,10 +236,7 @@ public class ChunkServer implements Server{
 			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "r");
 			int length = (int) raFile.length();
 
-			List<String> checkSums;
-			synchronized (fileChecksums) {
-				checkSums = fileChecksums.get(filename);
-			}
+			List<String> checkSums = fileChecksums.get(filename);
 
 			bytes = new byte[length];
 			raFile.readFully(bytes);

@@ -32,13 +32,10 @@ public class ChunkServerHeartbeat implements Event{
 		List<FileMetadata> fileInfo = new LinkedList<>();
 		int port = 0;
 		try {
-			port = din.readInt();
-			int listSize = din.readInt();
-			for(int i = 0; i < listSize; i++) {
-				fileInfo.add(new FileMetadata(din));
-			}
-
-			din.close();
+			MessageReader messageReader = new MessageReader(din);
+			port = messageReader.readInt();
+			messageReader.readMetadataList(fileInfo);
+			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
@@ -65,27 +62,33 @@ public class ChunkServerHeartbeat implements Event{
 
 	@Override
 	public byte[] getBytes() throws IOException {
-		byte[] marshalledData;
-		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
-		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
+		MessageMarshaller messageMarshaller = new MessageMarshaller();
 
-		dout.writeInt(getType().getValue());
-		dout.writeInt(port);
+		messageMarshaller.writeInt(getType().getValue());
+		messageMarshaller.writeInt(port);
 
-		dout.writeInt(fileInfo.size());
-		for(FileMetadata metadata : fileInfo) {
-			byte[] metaBytes = metadata.getBytes();
-			dout.write(metaBytes);
-		}
+		messageMarshaller.writeMetadataList(fileInfo);
+//		byte[] marshalledData;
+//		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
+//		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
+//
+//		dout.writeInt(getType().getValue());
+//		dout.writeInt(port);
+//
+//		dout.writeInt(fileInfo.size());
+//		for(FileMetadata metadata : fileInfo) {
+//			byte[] metaBytes = metadata.getBytes();
+//			dout.write(metaBytes);
+//		}
 
-		dout.flush();
-		marshalledData = baOutStream.toByteArray();
+//		dout.flush();
+//		marshalledData = baOutStream.toByteArray();
+//
+//		baOutStream.close();
+//		dout.close();
 
-		baOutStream.close();
-		dout.close();
 
-
-		return marshalledData;
+		return messageMarshaller.getMarshalledData();
 
 	}
 

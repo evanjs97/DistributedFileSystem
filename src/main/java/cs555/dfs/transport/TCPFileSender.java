@@ -2,10 +2,12 @@ package cs555.dfs.transport;
 
 import cs555.dfs.messaging.ChunkWriteRequest;
 import cs555.dfs.util.ChunkUtil;
+import cs555.dfs.util.FileMetadata;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.Socket;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -17,6 +19,7 @@ public class TCPFileSender implements Runnable{
 	private ArrayBlockingQueue<LinkedList<ChunkUtil>> availableLocations = new ArrayBlockingQueue<>(1000);
 	private HashMap<ChunkUtil, TCPSender> senders = new HashMap<>();
 	private final String filename;
+	private final Instant lastModified;
 	private final String destination;
 	private final RandomAccessFile file;
 	private final long fileSize;
@@ -26,6 +29,8 @@ public class TCPFileSender implements Runnable{
 
 	public TCPFileSender(String filename, String destination) throws IOException{
 		this.filename = filename;
+		this.lastModified = FileMetadata.getLastModifiedTime(filename);
+
 		file = new RandomAccessFile(filename, "r");
 		fileSize = file.length();
 		long temp = fileSize / bufferSize;
@@ -67,7 +72,7 @@ public class TCPFileSender implements Runnable{
 				TCPSender sender = senders.get(dest);
 				file.readFully(chunk);
 
-				ChunkWriteRequest request = new ChunkWriteRequest(locations,this.destination+"_chunk_"+i, chunk);
+				ChunkWriteRequest request = new ChunkWriteRequest(locations,this.destination+"_chunk_"+i, chunk, lastModified);
 				sender.sendData(request.getBytes());
 				sender.flush();
 				bytesRemaining-=chunk.length;

@@ -19,10 +19,6 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 		this.port = port;
 	}
 
-	public int getAssignedChunks() {
-		return assignedChunks;
-	}
-
 	public void incrementAssignedChunks() {
 		this.assignedChunks++;
 	}
