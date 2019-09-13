@@ -48,6 +48,11 @@ public class ChunkServer implements Server{
 		}
 	}
 
+	/**
+	 * Initializes chunk server, starts server on random port
+	 * Registers itself with the controller server
+	 * Sets up heartbeat server to send heartbeats to the controller
+	 */
 	private void init() {
 		TCPServer tcpServer = new TCPServer(0, this);
 		System.out.println("ChunkServer: Starting on " + tcpServer.getInetAddress().getCanonicalHostName()+":"+tcpServer.getLocalPort());
@@ -64,6 +69,11 @@ public class ChunkServer implements Server{
 		heartbeatThread.start();
 	}
 
+	/**
+	 * Registers the chunk server with the Controller
+	 * @param hostname the hostname of the controller
+	 * @param port the port of the controller server
+	 */
 	private void register(String hostname, int port) {
 		try {
 			TCPSender sender = new TCPSender(new Socket(this.hostname, this.hostPort));
@@ -97,6 +107,11 @@ public class ChunkServer implements Server{
 	}
 
 
+	/**
+	 * handle chunk write request from client
+	 * initializes chunk write to file
+	 * @param request the chunk write request
+	 */
 	private void writeChunk(ChunkWriteRequest request) {
 		if(!request.getLocations().isEmpty()) {
 			forwardChunk(request);
@@ -105,6 +120,12 @@ public class ChunkServer implements Server{
 
 	}
 
+	/**
+	 * write file handles writing of file to disk
+	 * the location of the write will be in BASE_DIR/filaname
+	 * @param chunk the chunk to write
+	 * @param filename the filename for that chunk
+	 */
 	private void writeFile(byte[] chunk, String filename) {
 		try {
 			String dir = BASE_DIR + filename.substring(0, filename.lastIndexOf("/"));
@@ -129,6 +150,13 @@ public class ChunkServer implements Server{
 		}
 	}
 
+	/**
+	 * handles incoming file read request from client
+	 * retrieves file from disk and sends to client
+	 * In case of file corruption, the client is informed in the message, then starts file repair task
+	 * @param request the read request
+	 * @param socket the socket that received the request
+	 */
 	private void handleFileReadRequest(ChunkReadRequest request, Socket socket) {
 		FileRead chunkRead = readFile(request.getFilename());
 
@@ -144,6 +172,11 @@ public class ChunkServer implements Server{
 		}
 	}
 
+	/**
+	 * handles response from another chunk server that contains the requested file
+	 * the received chunk, overwrites the original chunk, unless the new one is also corrupt
+	 * @param response the response received from the chunk server
+	 */
 	private void handleChunkReadResponse(ChunkReadResponse response) {
 		if(response.isSuccess()) {
 			System.out.println("Chunk Server: Repairing file corruption: " + response.getFilename());
@@ -166,6 +199,10 @@ public class ChunkServer implements Server{
 		}
 	}
 
+	/**
+	 * repairCorruptFile initializes chunk repair request
+	 * @param filename the filename associated with the corrupt file
+	 */
 	private void repairCorruptFile(String filename) {
 		try {
 			TCPSender sender = new TCPSender(new Socket(hostname, hostPort));
@@ -175,6 +212,9 @@ public class ChunkServer implements Server{
 		}
 	}
 
+	/**
+	 * Util pair class for use with file reading
+	 */
 	class FileRead {
 		final byte[] bytes;
 		final boolean corrupted;
@@ -186,6 +226,11 @@ public class ChunkServer implements Server{
 	}
 
 
+	/**
+	 * readFile reads the specified file from disk, and checks it for corruptions
+	 * @param filename the filename to read from
+	 * @return a FileRead object that contains chunk and corruption information
+	 */
 	private FileRead readFile(String filename) {
 		byte[] bytes = null;
 		boolean corrupted = false;
@@ -211,11 +256,15 @@ public class ChunkServer implements Server{
 		return new FileRead(bytes, corrupted);
 	}
 
+	/**
+	 * Forwards a chunk to the next location from the list
+	 * @param request the chunk write request to use for forwarding.
+	 */
 	private void forwardChunk(ChunkWriteRequest request) {
 		ChunkUtil chunkUtil = request.getLocations().pollFirst();
 		try {
 			TCPSender sender = new TCPSender(new Socket(chunkUtil.getHostname(), chunkUtil.getPort()));
-			sender.sendData(new ChunkWriteRequest(request.getLocations(),request.getFilename(),request.getChunkData()).getBytes());
+			sender.sendData(request.getBytes());
 			sender.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
