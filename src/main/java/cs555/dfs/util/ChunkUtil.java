@@ -112,7 +112,7 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 
 		StringBuilder builder = new StringBuilder(hashNumber.toString(16));
 
-		while(builder.length() < 32) {
+		while(builder.length() < 40) {
 			builder.insert(0, '0');
 		}
 

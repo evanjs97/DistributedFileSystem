@@ -10,16 +10,20 @@ import cs555.dfs.util.Heartbeat;
 
 import java.io.*;
 import java.net.Socket;
+import java.security.DigestException;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 public class ChunkServer implements Server{
 
 	private final String hostname;
 	private final int hostPort;
 	private int port;
-	private final ConcurrentHashMap<String, List<String>> fileChecksums = new ConcurrentHashMap<>();
-	private final Set<String> newFiles = new HashSet<>();
+	private final ConcurrentSkipListSet<String> files = new ConcurrentSkipListSet<>();
+	private final ConcurrentSkipListSet<String> newFiles = new ConcurrentSkipListSet<>();
+	private static final int CHECKSUM_SLICE = 8 * 1024;
+	private static final int CHECKSUM = 40;
 
 	private final String BASE_DIR;
 
@@ -34,7 +38,7 @@ public class ChunkServer implements Server{
 	}
 
 	public Set<String> getAllFiles() {
-		return this.fileChecksums.keySet();
+		return files;
 	}
 
 	public final int getPort() {
@@ -61,8 +65,8 @@ public class ChunkServer implements Server{
 		server.start();
 
 		List<Heartbeat> heartbeatList = new LinkedList<>();
-		heartbeatList.add(new Heartbeat(30, new HeartbeatTask(hostname, hostPort, this, Event.Type.CHUNK_SERVER_MINOR_HEARTBEAT, BASE_DIR)));
-		heartbeatList.add(new Heartbeat(5 * 60, new HeartbeatTask(hostname, hostPort, this, Event.Type.CHUNK_SERVER_MAJOR_HEARTBEAT, BASE_DIR)));
+		heartbeatList.add(new Heartbeat(30, new ChunkServerHeartbeatTask(hostname, hostPort, this, Event.Type.CHUNK_SERVER_MINOR_HEARTBEAT, BASE_DIR)));
+		heartbeatList.add(new Heartbeat(5 * 60, new ChunkServerHeartbeatTask(hostname, hostPort, this, Event.Type.CHUNK_SERVER_MAJOR_HEARTBEAT, BASE_DIR)));
 		TCPHeartbeat heartbeat = new TCPHeartbeat(heartbeatList);
 		Thread heartbeatThread = new Thread(heartbeat);
 		heartbeatThread.start();
@@ -132,19 +136,43 @@ public class ChunkServer implements Server{
 			file.mkdirs();
 
 			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "rw");
-			List<String> checkSums = ChunkUtil.getChecksums(chunk);
-			fileChecksums.put(filename, checkSums);
+			raFile.seek(0);
+
+			int numChecksums = chunk.length / (8 * 1024);
+			if(chunk.length % (8 * 1024) > 0) {
+				numChecksums++;
+			}
+			int remainingBytes = chunk.length;
+			int offset = 0;
+			int length = CHECKSUM_SLICE;
+			for(int i = 0; i < numChecksums; i++) {
+
+				byte[] range = Arrays.copyOfRange(chunk, offset, length);
+				raFile.write(range);
+
+				raFile.write(ChunkUtil.SHAChecksum(range).getBytes());
+
+				remainingBytes -= CHECKSUM_SLICE;
+				offset = length;
+				if(CHECKSUM_SLICE > remainingBytes) length += remainingBytes;
+				else length += CHECKSUM_SLICE;
+			}
 
 			raFile.write(chunk);
-			raFile.setLength(chunk.length);
-			synchronized (newFiles) {
-				newFiles.add(filename);
-			}
+			raFile.setLength(chunk.length+(numChecksums*CHECKSUM));
+
+			newFiles.add(filename);
+			files.add(filename);
 			raFile.close();
+			FileMetadata.incrementVersion(BASE_DIR+filename+".metadata");
 		}catch(FileNotFoundException fnfe) {
 			fnfe.printStackTrace();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
+		}catch(NoSuchAlgorithmException nsae) {
+			nsae.printStackTrace();
+		}catch(DigestException de) {
+			de.printStackTrace();
 		}
 	}
 
@@ -178,20 +206,7 @@ public class ChunkServer implements Server{
 	private void handleChunkReadResponse(ChunkReadResponse response) {
 		if(response.isSuccess()) {
 			System.out.println("Chunk Server: Repairing file corruption: " + response.getFilename());
-			byte[] validChunk = response.getChunk();
-			try {
-				RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + response.getFilename(), "rw");
-				raFile.seek(0);
-				raFile.write(validChunk);
-
-				raFile.setLength(validChunk.length);
-				raFile.close();
-				System.out.println("Chunk Server: Fixed file corruption");
-			}catch(FileNotFoundException fnfe) {
-				fnfe.printStackTrace();
-			}catch(IOException ioe) {
-				ioe.printStackTrace();
-			}
+			writeFile(response.getChunk(), response.getFilename());
 		}else {
 			System.out.println("Chunk Server: Unable to repair corruption");
 		}
@@ -232,21 +247,40 @@ public class ChunkServer implements Server{
 	private FileRead readFile(String filename) {
 		byte[] bytes = null;
 		boolean corrupted = false;
+		int chunkNum = 0;
 		try {
 			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "r");
+			raFile.seek(0);
 			int length = (int) raFile.length();
 
-			List<String> checkSums = fileChecksums.get(filename);
+			ByteArrayOutputStream baout = new ByteArrayOutputStream();
 
-			bytes = new byte[length];
-			raFile.readFully(bytes);
-			List<String> newChecks = ChunkUtil.getChecksums(bytes);
-			corrupted = ChunkUtil.getCorruptedFromChecksums(checkSums, newChecks);
-
+			for(int i = 0; i < length; i+=CHECKSUM_SLICE+CHECKSUM) {
+				int numBytes = CHECKSUM_SLICE;
+				if(length - (i + CHECKSUM) < CHECKSUM_SLICE) {
+					numBytes = length - (i + CHECKSUM);
+				}
+				byte[] arr = new byte[numBytes];
+				byte[] checksum = new byte[CHECKSUM];
+				raFile.readFully(arr);
+				raFile.readFully(checksum);
+				if(!ChunkUtil.SHAChecksum(arr).equals(new String(checksum))) {
+					System.out.println("CORRUPTED: " + i + " CHUNKNUM: " + chunkNum);
+					corrupted = true;
+				}
+				chunkNum++;
+				baout.write(arr);
+			}
+			bytes = baout.toByteArray();
+			raFile.close();
 		}catch(FileNotFoundException fnfe) {
 			fnfe.printStackTrace();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
+		}catch(NoSuchAlgorithmException nsae) {
+			nsae.printStackTrace();
+		}catch(DigestException de) {
+			de.printStackTrace();
 		}
 		return new FileRead(bytes, corrupted);
 	}

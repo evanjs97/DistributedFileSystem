@@ -1,6 +1,5 @@
 package cs555.dfs.transport;
 
-import cs555.dfs.server.ChunkServer;
 import cs555.dfs.util.Heartbeat;
 
 import java.time.Duration;
@@ -27,7 +26,6 @@ public class TCPHeartbeat implements Runnable{
 			for(Heartbeat beat : heartbeatIntervals) {
 				Instant now = Instant.now();
 				Duration duration = Duration.between(start, now);
-				//TO DO: add grace period?
 				if(duration.getSeconds() % beat.getTime() == 0 && duration.getSeconds() > 0 && lastSeconds != duration.getSeconds()) {
 					lastSeconds = duration.getSeconds();
 					beat.getHeartbeatTask().execute();

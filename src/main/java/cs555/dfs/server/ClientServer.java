@@ -8,7 +8,6 @@ import cs555.dfs.transport.TCPServer;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.HashMap;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -47,7 +46,8 @@ public class ClientServer implements Server{
 	 */
 	private void handleChunkDestinationResponse(ChunkDestinationResponse response) {
 		if(uploader != null) {
-			uploader.addLocationList(response.getLocations());
+			int index = Integer.parseInt(response.getFilename().substring(response.getFilename().lastIndexOf('_')+1));
+			uploader.addLocationList(response.getLocations(), index);
 		}else {
 			System.err.println("Client: Unable to handle chunk location response file sender not running");
 		}
@@ -61,11 +61,20 @@ public class ClientServer implements Server{
 	 */
 	private void handleChunkReadResponse(ChunkReadResponse response) {
 		if(!response.isSuccess()) {
-			System.out.println("Failed to retrieve file from chunk server\n" +
-					"Chunk Server detected corruption for file: " + response.getFilename());
+			System.out.println("Chunk Server detected corruption for file: " + response.getFilename() + " trying to read again.");
+			try {
+				Socket socket = new Socket(controllerHostname, controllerPort);
+				TCPSender sender = new TCPSender(socket);
+				MessagingUtil.handleChunkLocationRequest(sender, response.getFilename(), port);
+			}catch(IOException ioe) {
+				ioe.printStackTrace();
+			}
+		} else if(reader != null){
+			int index = Integer.parseInt(response.getFilename().substring(response.getFilename().lastIndexOf('_') + 1));
+			synchronized (reader) {
+				reader.addFileBytes(response.getChunk(), index);
+			}
 		}
-		int index = Integer.parseInt(response.getFilename().substring(response.getFilename().lastIndexOf('_')+1));
-		reader.addFileBytes(response.getChunk(), index);
 	}
 
 	private void handleUserInput() {
@@ -119,21 +128,16 @@ public class ClientServer implements Server{
 			this.uploader = fileSender;
 
 			long numChunks = fileSender.getNumChunks();
-			Thread thread = new Thread(fileSender);
-			thread.start();
 
 			for(long i = 0; i < numChunks; i++) {
 				this.filenameToChunks.put(destination, numChunks);
-				sender.sendData(new ChunkDestinationRequest(this.port).getBytes());
+				sender.sendData(new ChunkDestinationRequest(this.port, destination+"_chunk_"+i).getBytes());
 				sender.flush();
 			}
 			socket.close();
-			thread.join();
 
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
-		}catch(InterruptedException ie) {
-			ie.printStackTrace();
 		}
 	}
 

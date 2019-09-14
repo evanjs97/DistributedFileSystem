@@ -6,6 +6,7 @@ import java.util.LinkedList;
 
 public class ChunkDestinationResponse implements Event{
 	private final LinkedList<ChunkUtil> locations;
+	private final String filename;
 
 	@Override
 	public Type getType() {
@@ -17,25 +18,34 @@ public class ChunkDestinationResponse implements Event{
 		MessageMarshaller messageMarshaller = new MessageMarshaller();
 		messageMarshaller.writeInt(getType().getValue());
 		messageMarshaller.writeChunkUtilList(locations);
+		messageMarshaller.writeString(filename);
 		return messageMarshaller.getMarshalledData();
 	}
 
-	public ChunkDestinationResponse(LinkedList<ChunkUtil> locations) {
+	public ChunkDestinationResponse(LinkedList<ChunkUtil> locations, String filename) {
+		this.filename = filename;
 		this.locations = locations;
 	}
 
 	public ChunkDestinationResponse(DataInputStream din) {
 		this.locations = new LinkedList<>();
+		String filename = "";
 		try {
 			MessageReader messageReader = new MessageReader(din);
 			messageReader.readChunkUtilList(locations);
+			filename = messageReader.readString();
 			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
+		this.filename = filename;
 	}
 
 	public LinkedList<ChunkUtil> getLocations() {
 		return locations;
+	}
+
+	public String getFilename() {
+		return this.filename;
 	}
 }

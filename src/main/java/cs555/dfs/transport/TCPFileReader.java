@@ -13,8 +13,9 @@ public class TCPFileReader {
 
 	private final byte[][] chunks;
 
+	private final String destination;
 	private final String filename;
-	private final RandomAccessFile file;
+	private RandomAccessFile file;
 	private final long numChunks;
 	private final AtomicInteger chunkCount;
 	private final int PRINT_INTERVAL;
@@ -25,32 +26,46 @@ public class TCPFileReader {
 		this.filename = filename;
 		this.chunks = new byte[(int)numChunks][];
 		this.chunkCount = new AtomicInteger(0);
-
 		if(destination.charAt(destination.length()-1) != '/') destination = destination + "/";
+		this.destination = destination;
+		this.PRINT_INTERVAL = (int) numChunks / 10;
+	}
+
+	private void setupDirectory() {
+
 		Path dir = Paths.get(destination);
 		try {
 			Files.createDirectories(dir);
+			this.file = new RandomAccessFile(destination+filename, "rw");
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
 
-		this.file = new RandomAccessFile(destination+filename, "rw");
-		this.PRINT_INTERVAL = (int) numChunks / 10;
+
 	}
 
 	public void addFileBytes(byte[] bytes, int index) {
-		int count = chunkCount.incrementAndGet();
 		synchronized (chunks) {
 			chunks[index] = bytes;
 		}
+		int count = chunkCount.incrementAndGet();
 		if(count % PRINT_INTERVAL == 0) {
-			System.out.print("--");
+			System.out.print("---");
 		}
 		if(count == this.numChunks) {
 			System.out.print(">\n");
+			setupDirectory();
 			readFile();
 		}
 
+	}
+
+	public void close() {
+		try {
+			file.close();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
 	}
 
 	private void readFile() {

@@ -1,8 +1,7 @@
 package cs555.dfs.util;
 
+import cs555.dfs.messaging.ChunkServerHeartbeatTask;
 import cs555.dfs.messaging.HeartbeatTask;
-
-import java.util.List;
 
 public class Heartbeat implements Comparable<Heartbeat>{
 	private final long time;
