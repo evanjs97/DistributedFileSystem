@@ -58,38 +58,13 @@ public class ChunkServerHeartbeat implements Event{
 		return output.toString();
 	}
 
-
-
 	@Override
 	public byte[] getBytes() throws IOException {
 		MessageMarshaller messageMarshaller = new MessageMarshaller();
-
 		messageMarshaller.writeInt(getType().getValue());
 		messageMarshaller.writeInt(port);
-
 		messageMarshaller.writeMetadataList(fileInfo);
-//		byte[] marshalledData;
-//		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
-//		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
-//
-//		dout.writeInt(getType().getValue());
-//		dout.writeInt(port);
-//
-//		dout.writeInt(fileInfo.size());
-//		for(FileMetadata metadata : fileInfo) {
-//			byte[] metaBytes = metadata.getBytes();
-//			dout.write(metaBytes);
-//		}
-
-//		dout.flush();
-//		marshalledData = baOutStream.toByteArray();
-//
-//		baOutStream.close();
-//		dout.close();
-
-
 		return messageMarshaller.getMarshalledData();
-
 	}
 
 }

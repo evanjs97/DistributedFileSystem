@@ -1,7 +1,6 @@
 package cs555.dfs.messaging;
 
 import java.io.*;
-import java.time.Instant;
 
 public class ChunkLocationRequest implements Event{
 
@@ -26,10 +25,6 @@ public class ChunkLocationRequest implements Event{
 		MessageMarshaller messageMarshaller = new MessageMarshaller();
 		messageMarshaller.marshallIntStringInt(getType().getValue(), filename, port);
 		return messageMarshaller.getMarshalledData();
-//		messageMarshaller.writeInt(getType().getValue());
-//		messageMarshaller.writeString(filename);
-//		messageMarshaller.writeInt(port);
-
 	}
 
 	public ChunkLocationRequest(String filename, int port) {
@@ -41,14 +36,10 @@ public class ChunkLocationRequest implements Event{
 		String filename = "";
 		int port = 0;
 		try {
-			int nameLength = din.readInt();
-			byte[] nameBytes = new byte[nameLength];
-			din.readFully(nameBytes);
-			filename = new String(nameBytes);
-
-			port = din.readInt();
-
-			din.close();
+			MessageReader messageReader = new MessageReader(din);
+			filename = messageReader.readString();
+			port = messageReader.readInt();
+			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}

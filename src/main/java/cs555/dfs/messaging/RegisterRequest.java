@@ -38,12 +38,9 @@ public class RegisterRequest implements Event{
 		String hostname = null;
 		int port = 0;
 		try {
-//			int hostLength = din.readInt();
-//			byte[] hostBytes = new byte[hostLength];
-//			din.readFully(hostBytes);
 			hostname = messageReader.readString();
-
 			port = messageReader.readInt();
+
 			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();

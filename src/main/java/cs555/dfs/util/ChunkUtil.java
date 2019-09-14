@@ -1,5 +1,9 @@
 package cs555.dfs.util;
 
+import cs555.dfs.messaging.MessageMarshaller;
+import cs555.dfs.messaging.MessageReader;
+
+import java.io.IOException;
 import java.math.BigInteger;
 import java.security.DigestException;
 import java.security.MessageDigest;
@@ -33,7 +37,18 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 
 	@Override
 	public String toString() {
-		return "ChunkServer: " + hostname + " running on port " + port;
+		return hostname + ":" + port;
+	}
+
+	public void writeChunkToStream(MessageMarshaller messageMarshaller) throws IOException{
+		messageMarshaller.writeString(hostname);
+		messageMarshaller.writeInt(port);
+	}
+
+	public static ChunkUtil readChunkFromStream(MessageReader reader) throws IOException{
+		String host = reader.readString();
+		int port = reader.readInt();
+		return new ChunkUtil(host, port);
 	}
 
 	@Override

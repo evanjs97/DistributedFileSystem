@@ -1,5 +1,6 @@
 package cs555.dfs.messaging;
 
+import cs555.dfs.util.ChunkUtil;
 import cs555.dfs.util.FileMetadata;
 
 import java.io.BufferedOutputStream;
@@ -23,6 +24,10 @@ public class MessageMarshaller {
 		dout.writeInt(value);
 	}
 
+	public void writeBoolean(boolean value) throws IOException {
+		dout.writeBoolean(value);
+	}
+
 	public void writeInstant(Instant time) throws IOException {
 		writeString(time.toString());
 	}
@@ -40,8 +45,15 @@ public class MessageMarshaller {
 
 	public void writeMetadataList(List<FileMetadata> list) throws IOException {
 		writeInt(list.size());
-		for(FileMetadata writable : list) {
-			writeByteArr(writable.getBytes());
+		for(FileMetadata metadata : list) {
+			metadata.writeToStream(this);
+		}
+	}
+
+	public void writeChunkUtilList(List<ChunkUtil> list) throws IOException {
+		writeInt(list.size());
+		for(ChunkUtil chunkUtil : list) {
+			chunkUtil.writeChunkToStream(this);
 		}
 	}
 

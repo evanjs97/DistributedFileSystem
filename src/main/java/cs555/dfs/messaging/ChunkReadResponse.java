@@ -1,10 +1,6 @@
 package cs555.dfs.messaging;
 
 import java.io.*;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
 
 public class ChunkReadResponse implements Event{
 
@@ -27,33 +23,16 @@ public class ChunkReadResponse implements Event{
 
 	public final boolean isSuccess() { return success; }
 
-
 	@Override
 	public byte[] getBytes() throws IOException {
-		byte[] marshalledData;
-
-		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
-		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
-
-		dout.writeInt(getType().getValue());
-
-		dout.writeBoolean(success);
-
+		MessageMarshaller messageMarshaller = new MessageMarshaller();
+		messageMarshaller.writeInt(getType().getValue());
+		messageMarshaller.writeBoolean(success);
 		if(success) {
-			dout.writeInt(chunk.length);
-			dout.write(chunk);
+			messageMarshaller.writeByteArr(chunk);
 		}
-
-		byte[] nameBytes = filename.getBytes();
-		dout.writeInt(nameBytes.length);
-		dout.write(nameBytes);
-
-		dout.flush();
-		marshalledData = baOutStream.toByteArray();
-		baOutStream.close();
-		dout.close();
-
-		return marshalledData;
+		messageMarshaller.writeString(filename);
+		return messageMarshaller.getMarshalledData();
 	}
 
 	public ChunkReadResponse(byte[] bytes, String filename, boolean success) {
@@ -68,20 +47,13 @@ public class ChunkReadResponse implements Event{
 		boolean success = true;
 
 		try{
-			success = din.readBoolean();
-
+			MessageReader messageReader = new MessageReader(din);
+			success = messageReader.readBoolean();
 			if(success) {
-				int chunkSize = din.readInt();
-				chunk = new byte[chunkSize];
-				din.readFully(chunk);
+				chunk = messageReader.readByteArr();
 			}
-			int nameLength = din.readInt();
-			byte[] nameBytes = new byte[nameLength];
-			din.readFully(nameBytes);
-			filename = new String(nameBytes);
-
-			din.close();
-
+			filename = messageReader.readString();
+			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
@@ -89,6 +61,4 @@ public class ChunkReadResponse implements Event{
 		this.filename = filename;
 		this.success = success;
 	}
-
-
 }

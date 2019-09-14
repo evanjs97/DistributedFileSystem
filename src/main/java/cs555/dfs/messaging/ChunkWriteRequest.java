@@ -5,16 +5,17 @@ import cs555.dfs.util.ChunkUtil;
 import java.io.*;
 import java.time.Instant;
 import java.util.LinkedList;
+import java.util.List;
 
 public class ChunkWriteRequest implements Event{
 
-	private final LinkedList<ChunkUtil> locations;
+	private final List<ChunkUtil> locations;
 	private final String filename;
 	private final byte[] chunkData;
 	private final Instant lastModified;
 
 	public LinkedList<ChunkUtil> getLocations() {
-		return locations;
+		return (LinkedList<ChunkUtil>) locations;
 	}
 
 	public String getFilename() {
@@ -37,13 +38,7 @@ public class ChunkWriteRequest implements Event{
 		MessageMarshaller messageMarshaller = new MessageMarshaller();
 		messageMarshaller.writeInt(getType().getValue());
 		messageMarshaller.writeString(filename);
-
-		messageMarshaller.writeInt(locations.size());
-		for(int i = 0; i < locations.size(); i++) {
-			ChunkUtil chunkServer = locations.get(i);
-			String chunk = (chunkServer.getHostname() + ":" + chunkServer.getPort());
-			messageMarshaller.writeString(chunk);
-		}
+		messageMarshaller.writeChunkUtilList(locations);
 
 		messageMarshaller.writeByteArr(chunkData);
 		messageMarshaller.writeInstant(lastModified);
@@ -67,12 +62,7 @@ public class ChunkWriteRequest implements Event{
 		try {
 			MessageReader messageReader = new MessageReader(din);
 			name = messageReader.readString();
-			int numLocations = messageReader.readInt();
-
-			for(int i = 0; i < numLocations; i++) {
-				String[] split = messageReader.readString().split(":");
-				locations.add(new ChunkUtil(split[0], Integer.parseInt(split[1])));
-			}
+			messageReader.readChunkUtilList(locations);
 			chunk = messageReader.readByteArr();
 			time = messageReader.readInstant();
 
@@ -83,40 +73,5 @@ public class ChunkWriteRequest implements Event{
 		chunkData = chunk;
 		filename = name;
 		lastModified = time;
-
-
-//
-//		String name = null;
-//		try {
-//			//read filename from stream
-//			int nameLength = din.readInt();
-//			byte[] nameBytes = new byte[nameLength];
-//			din.readFully(nameBytes);
-//			name = new String(nameBytes);
-//
-//			//read locations from stream
-//			byte[] location;
-//			int num = din.readInt();
-//			for (int i = 0; i < num; i++) {
-//				int length = din.readInt();
-//
-//				location = new byte[length];
-//				din.readFully(location);
-//
-//				String[] split = new String(location).split(":");
-//				locations.add(new ChunkUtil(split[0], Integer.parseInt(split[1])));
-//			}
-
-			//read chunk data from stream
-//			int chunkSize = din.readInt();
-//			chunk = new byte[chunkSize];
-//			din.readFully(chunk);
-//
-//			din.close();
-
-//		}catch(IOException ioe) {
-//			ioe.printStackTrace();
-//		}
-
 	}
 }

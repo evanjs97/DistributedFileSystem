@@ -91,11 +91,11 @@ public class FileMetadata {
 		return this.filename + " last modified at " + lastModified;
 	}
 
-	public byte[] getBytes() throws IOException{
-		MessageMarshaller messageMarshaller = new MessageMarshaller();
+	public void writeToStream(MessageMarshaller messageMarshaller) throws IOException{
+//		MessageMarshaller messageMarshaller = new MessageMarshaller();
 		messageMarshaller.writeString(filename);
 		messageMarshaller.writeInstant(lastModified);
-		return messageMarshaller.getMarshalledData();
+//		return messageMarshaller.getMarshalledData();
 //		byte[] marshalledData;
 //		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
 //		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));

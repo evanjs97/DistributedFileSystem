@@ -31,29 +31,11 @@ public class ChunkLocationResponse implements Event{
 
 	@Override
 	public byte[] getBytes() throws IOException {
-		byte[] marshalledData;
-		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
-		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
-
-		dout.writeInt(getType().getValue());
-		dout.writeBoolean(success);
-
-		byte[] hostBytes = hostname.getBytes();
-		dout.writeInt(hostBytes.length);
-		dout.write(hostBytes);
-
-		dout.writeInt(port);
-
-		byte[] nameBytes = filename.getBytes();
-		dout.writeInt(nameBytes.length);
-		dout.write(nameBytes);
-
-		dout.flush();
-		marshalledData = baOutStream.toByteArray();
-		baOutStream.close();
-		dout.close();
-
-		return marshalledData;
+		MessageMarshaller messageMarshaller = new MessageMarshaller();
+		messageMarshaller.marshallIntStringInt(getType().getValue(), hostname, port);
+		messageMarshaller.writeBoolean(success);
+		messageMarshaller.writeString(filename);
+		return messageMarshaller.getMarshalledData();
 	}
 
 	public ChunkLocationResponse(String hostname, int port, boolean success, String filename) {
@@ -69,20 +51,12 @@ public class ChunkLocationResponse implements Event{
 		boolean success = false;
 		String filename = "";
 		try {
-			success = din.readBoolean();
-			int hostLength = din.readInt();
-			byte[] hostBytes = new byte[hostLength];
-			din.readFully(hostBytes);
-			hostname = new String(hostBytes);
-
-			port = din.readInt();
-
-			int nameLength = din.readInt();
-			byte[] nameBytes = new byte[nameLength];
-			din.readFully(nameBytes);
-			filename = new String(nameBytes);
-
-			din.close();
+			MessageReader messageReader = new MessageReader(din);
+			hostname = messageReader.readString();
+			port = messageReader.readInt();
+			success = messageReader.readBoolean();
+			filename = messageReader.readString();
+			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}

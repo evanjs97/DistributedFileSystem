@@ -16,18 +16,10 @@ public class ChunkDestinationRequest implements Event{
 
 	@Override
 	public byte[] getBytes() throws IOException {
-		byte[] marshalledData;
-		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
-		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
-
-		dout.writeInt(getType().getValue());
-		dout.writeInt(port);
-		dout.flush();
-		marshalledData = baOutStream.toByteArray();
-
-		baOutStream.close();
-		dout.close();
-		return marshalledData;
+		MessageMarshaller messageMarshaller = new MessageMarshaller();
+		messageMarshaller.writeInt(getType().getValue());
+		messageMarshaller.writeInt(port);
+		return messageMarshaller.getMarshalledData();
 	}
 
 	public ChunkDestinationRequest(int port) {
@@ -35,10 +27,10 @@ public class ChunkDestinationRequest implements Event{
 	}
 
 	public ChunkDestinationRequest(DataInputStream din) {
+		MessageReader messageReader = new MessageReader(din);
 		try {
-			port = din.readInt();
-
-			din.close();
+			port = messageReader.readInt();
+			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
