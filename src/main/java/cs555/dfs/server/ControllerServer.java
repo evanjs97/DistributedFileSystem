@@ -1,10 +1,12 @@
 package cs555.dfs.server;
 
 import cs555.dfs.messaging.*;
+import cs555.dfs.transport.TCPHeartbeat;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
 import cs555.dfs.util.FileMetadata;
+import cs555.dfs.util.Heartbeat;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -15,9 +17,27 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class ControllerServer implements Server{
 
-	private final ConcurrentHashMap<String, List<ChunkUtil>> fileToServers = new ConcurrentHashMap<>();
+	public class SetIndexPair {
+		final ConcurrentSkipListSet<ChunkUtil> map;
+		final ArrayList<ChunkUtil> index;
+
+		public ArrayList<ChunkUtil> getIndex() {
+			 return index;
+		}
+
+		public ConcurrentSkipListSet<ChunkUtil> getMap() {
+			 return map;
+		}
+
+		SetIndexPair(ConcurrentSkipListSet<ChunkUtil> map, ArrayList<ChunkUtil> index) {
+			this.map = map;
+			this.index = index;
+		}
+	}
+
+	private final ConcurrentHashMap<String, SetIndexPair> fileToServers = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ChunkUtil> hostToServerObject = new ConcurrentHashMap<>();
-	private final ConcurrentHashMap<String, List<String>> hostToFiles = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<ChunkUtil, List<String>> hostToFiles = new ConcurrentHashMap<>();
 	private final ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
 	private final int replicationLevel = 3;
 	private final int port;
@@ -30,20 +50,30 @@ public class ControllerServer implements Server{
 		TCPServer tcpServer = new TCPServer(port, this);
 		Thread server = new Thread(tcpServer);
 		server.start();
+
+		List<Heartbeat> heartbeatList = new LinkedList<>();
+		heartbeatList.add(new Heartbeat(45, new ControllerHeartbeatTask(hostToFiles, fileToServers, chunkServers)));
+		TCPHeartbeat heartbeat = new TCPHeartbeat(heartbeatList);
+		Thread heartbeatThread = new Thread(heartbeat);
+		heartbeatThread.start();
 	}
 
 	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
-		List<ChunkUtil> util = fileToServers.getOrDefault(request.getFilename(), null);
+		SetIndexPair util = fileToServers.getOrDefault(request.getFilename(), null);
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 
 		if(util != null) {
-			replicationServers.addAll(util);
+			replicationServers.addAll(util.map);
 		}else {
 			for (int i = 0; i < replicationLevel; i++) {
-				ChunkUtil chunk = chunkServers.pollFirst();
-				chunk.incrementAssignedChunks();
-				replicationServers.add(chunk);
-				chunkServers.add(chunk);
+				synchronized (chunkServers) {
+					if (!chunkServers.isEmpty()) {
+						ChunkUtil chunk = chunkServers.pollFirst();
+						chunk.incrementAssignedChunks();
+						replicationServers.add(chunk);
+						chunkServers.add(chunk);
+					}
+				}
 			}
 		}
 
@@ -69,15 +99,18 @@ public class ControllerServer implements Server{
 	}
 
 	private void handleMinorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
-//		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort());
+		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort());
 		for(FileMetadata metadata : heartbeat.getFileInfo()) {
 			ChunkUtil chunkUtil = hostToServerObject.get(socket.getInetAddress().getCanonicalHostName() + ":" + heartbeat.getPort());
 			if(chunkUtil != null) {
-				fileToServers.putIfAbsent(metadata.getFilename(), new ArrayList<>());
-				fileToServers.get(metadata.getFilename()).add(chunkUtil);
+				fileToServers.putIfAbsent(metadata.getFilename(), new SetIndexPair(new ConcurrentSkipListSet<>(), new ArrayList<>()));
+				boolean added = fileToServers.get(metadata.getFilename()).map.add(chunkUtil);
+				if(added) {
+					fileToServers.get(metadata.getFilename()).index.add(chunkUtil);
+				}
 
-				hostToFiles.putIfAbsent(chunkUtil.toString(), new LinkedList<>());
-				hostToFiles.get(chunkUtil.toString()).add(metadata.getFilename());
+				hostToFiles.putIfAbsent(chunkUtil, new LinkedList<>());
+				hostToFiles.get(chunkUtil).add(metadata.getFilename());
 			}else {
 				System.err.println("Error: Chunk server is not registered");
 			}
@@ -92,7 +125,7 @@ public class ControllerServer implements Server{
 	 * @param socket the socket the request was received over
 	 */
 	private void handleChunkLocationRequest(ChunkLocationRequest request, Socket socket) {
-		List<ChunkUtil> fileServers = fileToServers.get(request.getFilename());
+		ArrayList<ChunkUtil> fileServers = fileToServers.get(request.getFilename()).index;
 		int random = ThreadLocalRandom.current().nextInt(0, fileServers.size());
 		ChunkUtil util = fileServers.get(random);
 

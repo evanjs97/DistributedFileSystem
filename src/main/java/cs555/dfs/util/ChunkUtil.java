@@ -60,6 +60,11 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 	}
 
 	@Override
+	public int hashCode() {
+		return this.hostname.hashCode() + port;
+	}
+
+	@Override
 	public int compareTo(ChunkUtil other) {
 		int thisChunk = this.assignedChunks;
 		int otherChunk = other.assignedChunks;
@@ -67,11 +72,6 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 		int host = this.hostname.compareTo(other.hostname);
 		if(host != 0) return host;
 		else return Integer.compare(this.port, other.port);
-	}
-
-	@Override
-	public int hashCode() {
-		return hostname.hashCode() + port;
 	}
 
 	public static List<String> getChecksums(byte[] chunk) {

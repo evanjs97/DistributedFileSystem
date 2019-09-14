@@ -75,6 +75,9 @@ public class EventFactory {
 				case CHUNK_READ_RESPONSE:
 					e = new ChunkReadResponse(din);
 					break;
+				case CHUNK_FORWARD_REQUEST:
+					e = new ChunkForwardRequest(din);
+					break;
 				default:
 					System.err.println("Event of type " + type + " does not exist.");
 					break;

@@ -12,6 +12,7 @@ import java.io.*;
 import java.net.Socket;
 import java.security.DigestException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 
@@ -103,9 +104,28 @@ public class ChunkServer implements Server{
 			case CHUNK_LOCATION_RESPONSE:
 				MessagingUtil.handleChunkLocationResponse((ChunkLocationResponse) event, port);
 				break;
+			case CHUNK_FORWARD_REQUEST:
+				System.out.println("Received Chunk Forwarding Request");
+				handleChunkForwardRequest((ChunkForwardRequest) event);
+				break;
 			default:
 				System.err.println("ChunkServer: No supported event of given type");
 				break;
+		}
+	}
+
+	private void handleChunkForwardRequest(ChunkForwardRequest request) {
+		FileRead chunkRead = readFile(request.getFilename());
+
+		try {
+			TCPSender sender = new TCPSender(new Socket(request.getDestHost(), request.getDestPort()));
+			Instant lastModified = FileMetadata.getLastModifiedTime(BASE_DIR+request.getFilename());
+			ChunkWriteRequest cwr = new ChunkWriteRequest(new LinkedList<>(), request.getFilename(), chunkRead.bytes, lastModified);
+			sender.sendData(cwr.getBytes());
+			sender.flush();
+		}catch(IOException ioe) {
+//			ioe.printStackTrace();
+			System.out.println("Failed to send to: " + request.getDestHost() + ":"+request.getDestPort());
 		}
 	}
 
@@ -116,6 +136,7 @@ public class ChunkServer implements Server{
 	 * @param request the chunk write request
 	 */
 	private void writeChunk(ChunkWriteRequest request) {
+		System.out.println("Writing File: " + request.getFilename());
 		if(!request.getLocations().isEmpty()) {
 			forwardChunk(request);
 		}
