@@ -17,7 +17,7 @@ public class ControllerHeartbeatTask implements HeartbeatTask{
 	private final ConcurrentHashMap<ChunkUtil, List<String>> hostToFiles;
 	private final ConcurrentHashMap<String, ControllerServer.SetIndexPair> filesToHost;
 	private final ConcurrentHashMap<ChunkUtil, TCPSender> senders = new ConcurrentHashMap<>();
-	private final ConcurrentSkipListSet<ChunkUtil> chunkServers;
+	private ConcurrentSkipListSet<ChunkUtil> chunkServers;
 
 	public ControllerHeartbeatTask(ConcurrentHashMap<ChunkUtil, List<String>> hostToFiles,
 								   ConcurrentHashMap<String, ControllerServer.SetIndexPair> filesToHost,
@@ -90,10 +90,12 @@ public class ControllerHeartbeatTask implements HeartbeatTask{
 	}
 
 	private ChunkUtil findRandomDestination(String filename) {
+		System.out.println("TEST");
 		synchronized (chunkServers) {
+			if(chunkServers.isEmpty()) return null;
 			ChunkUtil util = chunkServers.pollFirst();
 			LinkedList<ChunkUtil> added = new LinkedList<>();
-			while (filesToHost.get(filename).getMap().contains(util)) {
+			while (filesToHost.get(filename).getMap().contains(util) && !chunkServers.isEmpty()) {
 				added.add(util);
 				util = chunkServers.pollFirst();
 			}

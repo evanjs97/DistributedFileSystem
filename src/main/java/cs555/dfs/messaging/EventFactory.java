@@ -57,11 +57,8 @@ public class EventFactory {
 				case REGISTER_REQUEST:
 					e = new RegisterRequest(din);
 					break;
-				case CHUNK_SERVER_MAJOR_HEARTBEAT:
-					e = new ChunkServerHeartbeat(din, type);
-					break;
-				case CHUNK_SERVER_MINOR_HEARTBEAT:
-					e = new ChunkServerHeartbeat(din, type);
+				case CHUNK_SERVER_HEARTBEAT:
+					e = new ChunkServerHeartbeat(din);
 					break;
 				case CHUNK_LOCATION_REQUEST:
 					e = new ChunkLocationRequest(din);

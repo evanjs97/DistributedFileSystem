@@ -38,7 +38,7 @@ public class ControllerServer implements Server{
 	private final ConcurrentHashMap<String, SetIndexPair> fileToServers = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ChunkUtil> hostToServerObject = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<ChunkUtil, List<String>> hostToFiles = new ConcurrentHashMap<>();
-	private final ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
+	private ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
 	private final int replicationLevel = 3;
 	private final int port;
 
@@ -58,23 +58,29 @@ public class ControllerServer implements Server{
 		heartbeatThread.start();
 	}
 
-	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
+	private synchronized void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
 		SetIndexPair util = fileToServers.getOrDefault(request.getFilename(), null);
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 
 		if(util != null) {
+			System.out.println("util null");
 			replicationServers.addAll(util.map);
 		}else {
 			for (int i = 0; i < replicationLevel; i++) {
-				synchronized (chunkServers) {
-					if (!chunkServers.isEmpty()) {
-						ChunkUtil chunk = chunkServers.pollFirst();
-						chunk.incrementAssignedChunks();
-						replicationServers.add(chunk);
-						chunkServers.add(chunk);
-					}
-				}
+				replicationServers.add(chunkServers.pollFirst());
+//				synchronized (chunkServers) {
+//					if (!chunkServers.isEmpty()) {
+//						ChunkUtil chunk = chunkServers.pollFirst();
+//						chunk.incrementAssignedChunks();
+//						replicationServers.add(chunk);
+//						System.out.println("Adding server back: " + chunk.toString() + " SIZE: " + chunkServers.size());
+//						chunkServers.add(chunk);
+//					}
+//				}
 			}
+			System.out.println("SIZE: " + chunkServers.size());
+			chunkServers.addAll(replicationServers);
+			System.out.println("SIZE: " + chunkServers.size());
 		}
 
 		try {
@@ -88,32 +94,39 @@ public class ControllerServer implements Server{
 
 	private void registerChunkServer(RegisterRequest request) {
 		System.out.println("Controller: Received register request from " + request.getHostname() + ":" + request.getPort());
-		ChunkUtil chunkUtil = new ChunkUtil(request.getHostname(), request.getPort());
-			this.chunkServers.add(chunkUtil);
-		this.hostToServerObject.put(request.getHostname() + ":" + request.getPort(), chunkUtil);
+		addChunkServer(request.getHostname(), request.getPort(), request.getFreeSpace());
 	}
 
-	private void handleMajorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
-		handleMinorHeartbeat(heartbeat, socket);
+	private void addChunkServer(String hostname, int port, long freeSpace) {
+		ChunkUtil chunkUtil = new ChunkUtil(hostname, port, freeSpace);
+
+		this.chunkServers.add(chunkUtil);
+		this.hostToServerObject.put(hostname + ":" + port, chunkUtil);
+	}
+
+//	private void handleMajorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
+//		handleMinorHeartbeat(heartbeat, socket);
 		//System.out.println(heartbeat);
-	}
+//	}
 
-	private void handleMinorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
-		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort());
+	private void handleChunkServerHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
+		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort() + " Free Space: " + heartbeat.getFreeDiskSpace());
+		String key = socket.getInetAddress().getCanonicalHostName() + ":" + heartbeat.getPort();
+		if(!hostToServerObject.containsKey(key)) {
+			addChunkServer(socket.getInetAddress().getCanonicalHostName(), heartbeat.getPort(), heartbeat.getFreeDiskSpace());
+		}
+		ChunkUtil chunkUtil = hostToServerObject.get(key);
+		chunkUtil.setFreeSpace(heartbeat.getFreeDiskSpace());
+
 		for(FileMetadata metadata : heartbeat.getFileInfo()) {
-			ChunkUtil chunkUtil = hostToServerObject.get(socket.getInetAddress().getCanonicalHostName() + ":" + heartbeat.getPort());
-			if(chunkUtil != null) {
-				fileToServers.putIfAbsent(metadata.getFilename(), new SetIndexPair(new ConcurrentSkipListSet<>(), new ArrayList<>()));
-				boolean added = fileToServers.get(metadata.getFilename()).map.add(chunkUtil);
-				if(added) {
-					fileToServers.get(metadata.getFilename()).index.add(chunkUtil);
-				}
-
-				hostToFiles.putIfAbsent(chunkUtil, new LinkedList<>());
-				hostToFiles.get(chunkUtil).add(metadata.getFilename());
-			}else {
-				System.err.println("Error: Chunk server is not registered");
+			fileToServers.putIfAbsent(metadata.getFilename(), new SetIndexPair(new ConcurrentSkipListSet<>(), new ArrayList<>()));
+			boolean added = fileToServers.get(metadata.getFilename()).map.add(chunkUtil);
+			if(added) {
+				fileToServers.get(metadata.getFilename()).index.add(chunkUtil);
 			}
+
+			hostToFiles.putIfAbsent(chunkUtil, new LinkedList<>());
+			hostToFiles.get(chunkUtil).add(metadata.getFilename());
 		}
 	}
 
@@ -160,11 +173,8 @@ public class ControllerServer implements Server{
 			case REGISTER_REQUEST:
 				registerChunkServer((RegisterRequest) event);
 				break;
-			case CHUNK_SERVER_MAJOR_HEARTBEAT:
-				handleMajorHeartbeat((ChunkServerHeartbeat) event, socket);
-				break;
-			case CHUNK_SERVER_MINOR_HEARTBEAT:
-				handleMinorHeartbeat((ChunkServerHeartbeat) event, socket);
+			case CHUNK_SERVER_HEARTBEAT:
+				handleChunkServerHeartbeat((ChunkServerHeartbeat) event, socket);
 				break;
 			case CHUNK_LOCATION_REQUEST:
 				handleChunkLocationRequest((ChunkLocationRequest) event, socket);

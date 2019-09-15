@@ -38,16 +38,7 @@ public class FileMetadata {
 		Instant lastModified = null;
 		int version = 0;
 		try {
-//			int nameLength = din.readInt();
-//			byte[] nameBytes = new byte[nameLength];
-//			din.readFully(nameBytes);
-//			filename = new String(nameBytes);
 			filename = messageReader.readString();
-
-//			int instantLength = din.readInt();
-//			byte[] instant = new byte[instantLength];
-//			din.readFully(instant);
-//			lastModified = Instant.parse(new String(instant));
 			lastModified = messageReader.readInstant();
 			version = messageReader.readInt();
 
@@ -71,21 +62,12 @@ public class FileMetadata {
 	}
 
 	public static int getFileVersion(RandomAccessFile raFile) {
-//		Path file = FileSystems.getDefault().getPath(path);
-//		UserDefinedFileAttributeView view = Files.getFileAttributeView(file, UserDefinedFileAttributeView.class);
 		int version = 1;
 		try {
 			raFile.seek(0);
 			if(raFile.length() > 0) {
 				return raFile.readInt();
 			}
-//			for (String item : view.list()) {
-//				if (item.equals("user.version")) {
-//					ByteBuffer buffer = ByteBuffer.allocate(4);
-//					view.read("user.version", buffer);
-//					version = buffer.getInt();
-//				}
-//			}
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
@@ -93,7 +75,6 @@ public class FileMetadata {
 	}
 
 	public static void incrementVersion(String path) {
-//		UserDefinedFileAttributeView view = Files.getFileAttributeView(file, UserDefinedFileAttributeView.class);
 		try {
 			RandomAccessFile raFile = new RandomAccessFile(path, "rw");
 			int version = getFileVersion(raFile) +1;
@@ -101,23 +82,26 @@ public class FileMetadata {
 			raFile.writeInt(version);
 			raFile.setLength(4);
 			raFile.close();
-//			view.write("user.version", ByteBuffer.allocate(4).putInt(version+1));
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
 	}
 
-	public static FileMetadata getFileMetadata(String path) {
-
-		Instant lastModified = getLastModifiedTime(path);
-		int version = 0;
-		try {
-			version = getFileVersion(new RandomAccessFile(path+".metadata", "r"));
-		} catch(FileNotFoundException fnfe) {
-			fnfe.printStackTrace();
-		}
-		return new FileMetadata(path.substring(path.lastIndexOf("/")+1), lastModified, version);
+	public static long getAvailableDiskSpace(String path) {
+		return new File(path).getFreeSpace();
 	}
+//
+//	public static FileMetadata getFileMetadata(String path) {
+//
+//		Instant lastModified = getLastModifiedTime(path);
+//		int version = 0;
+//		try {
+//			version = getFileVersion(new RandomAccessFile(path+".metadata", "r"));
+//		} catch(FileNotFoundException fnfe) {
+//			fnfe.printStackTrace();
+//		}
+//		return new FileMetadata(path.substring(path.lastIndexOf("/")+1), lastModified, version);
+//	}
 
 	public static void setLastModifiedTime(String path, Instant time) {
 		try {
@@ -143,28 +127,8 @@ public class FileMetadata {
 	}
 
 	public void writeToStream(MessageMarshaller messageMarshaller) throws IOException{
-//		MessageMarshaller messageMarshaller = new MessageMarshaller();
 		messageMarshaller.writeString(filename);
 		messageMarshaller.writeInstant(lastModified);
 		messageMarshaller.writeInt(version);
-//		return messageMarshaller.getMarshalledData();
-//		byte[] marshalledData;
-//		ByteArrayOutputStream baOutStream = new ByteArrayOutputStream();
-//		DataOutputStream dout = new DataOutputStream(new BufferedOutputStream(baOutStream));
-//		byte[] nameBytes = filename.getBytes();
-//		dout.writeInt(nameBytes.length);
-//		dout.write(nameBytes);
-
-//		byte[] instant = lastModified.toString().getBytes();
-//		dout.writeInt(instant.length);
-//		dout.write(instant);
-
-//		dout.flush();
-//		marshalledData = baOutStream.toByteArray();
-//		baOutStream.close();
-//		dout.close();
-//
-//		return marshalledData;
-
 	}
 }

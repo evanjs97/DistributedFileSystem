@@ -24,6 +24,10 @@ public class MessageReader {
 		return din.readBoolean();
 	}
 
+	public long readLong() throws IOException {
+		return din.readLong();
+	}
+
 	public Instant readInstant() throws IOException {
 		return Instant.parse(readString());
 	}

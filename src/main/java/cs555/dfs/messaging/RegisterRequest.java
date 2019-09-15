@@ -6,6 +6,7 @@ public class RegisterRequest implements Event{
 
 	private final String hostname;
 	private final int port;
+	private final long freeSpace;
 
 	public String getHostname() {
 		return hostname;
@@ -14,6 +15,8 @@ public class RegisterRequest implements Event{
 	public int getPort() {
 		return port;
 	}
+
+	public long getFreeSpace() { return this.freeSpace; }
 
 	@Override
 	public Type getType() {
@@ -24,12 +27,14 @@ public class RegisterRequest implements Event{
 	public byte[] getBytes() throws IOException {
 		MessageMarshaller messageMarshaller = new MessageMarshaller();
 		messageMarshaller.marshallIntStringInt(getType().getValue(), hostname, port);
+		messageMarshaller.writeLong(freeSpace);
 		return messageMarshaller.getMarshalledData();
 	}
 
-	public RegisterRequest(String hostname, int port) {
+	public RegisterRequest(String hostname, int port, long freeSpace) {
 		this.hostname = hostname;
 		this.port = port;
+		this.freeSpace = freeSpace;
 	}
 
 	public RegisterRequest(DataInputStream din) {
@@ -37,9 +42,11 @@ public class RegisterRequest implements Event{
 
 		String hostname = null;
 		int port = 0;
+		long freeSpace = -1;
 		try {
 			hostname = messageReader.readString();
 			port = messageReader.readInt();
+			freeSpace = messageReader.readLong();
 
 			messageReader.close();
 		}catch(IOException ioe) {
@@ -47,6 +54,7 @@ public class RegisterRequest implements Event{
 		}
 		this.hostname = hostname;
 		this.port = port;
+		this.freeSpace = freeSpace;
 
 	}
 }

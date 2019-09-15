@@ -66,8 +66,8 @@ public class ChunkServer implements Server{
 		server.start();
 
 		List<Heartbeat> heartbeatList = new LinkedList<>();
-		heartbeatList.add(new Heartbeat(30, new ChunkServerHeartbeatTask(hostname, hostPort, this, Event.Type.CHUNK_SERVER_MINOR_HEARTBEAT, BASE_DIR)));
-		heartbeatList.add(new Heartbeat(5 * 60, new ChunkServerHeartbeatTask(hostname, hostPort, this, Event.Type.CHUNK_SERVER_MAJOR_HEARTBEAT, BASE_DIR)));
+		heartbeatList.add(new Heartbeat(30, new ChunkServerHeartbeatTask(hostname, hostPort, this, newFiles, BASE_DIR)));
+		heartbeatList.add(new Heartbeat(5 * 60, new ChunkServerHeartbeatTask(hostname, hostPort, this, files, BASE_DIR)));
 		TCPHeartbeat heartbeat = new TCPHeartbeat(heartbeatList);
 		Thread heartbeatThread = new Thread(heartbeat);
 		heartbeatThread.start();
@@ -81,7 +81,8 @@ public class ChunkServer implements Server{
 	private void register(String hostname, int port) {
 		try {
 			TCPSender sender = new TCPSender(new Socket(this.hostname, this.hostPort));
-			sender.sendData(new RegisterRequest(hostname, port).getBytes());
+			long freeSpace = FileMetadata.getAvailableDiskSpace(BASE_DIR);
+			sender.sendData(new RegisterRequest(hostname, port, freeSpace).getBytes());
 			sender.close();
 		}catch (IOException ioe) {
 			ioe.printStackTrace();
@@ -124,7 +125,6 @@ public class ChunkServer implements Server{
 			sender.sendData(cwr.getBytes());
 			sender.flush();
 		}catch(IOException ioe) {
-//			ioe.printStackTrace();
 			System.out.println("Failed to send to: " + request.getDestHost() + ":"+request.getDestPort());
 		}
 	}

@@ -8,55 +8,68 @@ import java.math.BigInteger;
 import java.security.DigestException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ChunkUtil implements Comparable<ChunkUtil>{
-	private int assignedChunks = 0;
+public class ChunkUtil implements Comparable<ChunkUtil> {
+	private final AtomicInteger assignedChunks = new AtomicInteger(0);
 	private final String hostname;
 	private final int port;
+	private long freeSpace;
 
-	public ChunkUtil(String hostname, int port) {
+	public ChunkUtil(String hostname, int port, long freeSpace) {
 		this.hostname = hostname;
 		this.port = port;
+		this.freeSpace = freeSpace;
 	}
 
-	public void incrementAssignedChunks() {
-		this.assignedChunks++;
+	public synchronized final int incrementAssignedChunks() {
+		return this.assignedChunks.incrementAndGet();
 	}
 
-	public String getHostname() {
+	public synchronized final void setFreeSpace(long freeSpace) {
+		this.freeSpace = freeSpace;
+	}
+
+	public synchronized final long getFreeSpace() {
+		return this.freeSpace;
+	}
+
+	public final String getHostname() {
 		return hostname;
 	}
 
-	public int getPort() {
+	public final int getPort() {
 		return port;
 	}
 
 	@Override
-	public String toString() {
+	public final String toString() {
 		return hostname + ":" + port;
 	}
 
-	public void writeChunkToStream(MessageMarshaller messageMarshaller) throws IOException{
+	public void writeChunkToStream(MessageMarshaller messageMarshaller) throws IOException {
 		messageMarshaller.writeString(hostname);
 		messageMarshaller.writeInt(port);
+		messageMarshaller.writeLong(freeSpace);
 	}
 
-	public static ChunkUtil readChunkFromStream(MessageReader reader) throws IOException{
+	public static ChunkUtil readChunkFromStream(MessageReader reader) throws IOException {
 		String host = reader.readString();
 		int port = reader.readInt();
-		return new ChunkUtil(host, port);
+		long freeSpace = reader.readLong();
+		return new ChunkUtil(host, port, freeSpace);
 	}
 
 	@Override
 	public boolean equals(Object o) {
-		if(o instanceof ChunkUtil) {
+		System.out.println("Checking equality: " + hostname);
+		if (o instanceof ChunkUtil) {
+
 			ChunkUtil d = (ChunkUtil) o;
+
 			return this.hostname.equals(d.hostname) && this.port == d.port;
-		}else return false;
+		} else return false;
 	}
 
 	@Override
@@ -66,43 +79,67 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 
 	@Override
 	public int compareTo(ChunkUtil other) {
-		int thisChunk = this.assignedChunks;
-		int otherChunk = other.assignedChunks;
-		if(thisChunk != otherChunk) return Integer.compare(thisChunk, otherChunk);
-		int host = this.hostname.compareTo(other.hostname);
-		if(host != 0) return host;
-		else return Integer.compare(this.port, other.port);
-	}
+		int myChunk = this.assignedChunks.get();
+		int theirChunk = other.assignedChunks.get();
+		long mySpace = this.getFreeSpace();
+		long theirSpace = other.getFreeSpace();
+		double chunkDiff = (myChunk == 0 || theirChunk == 0) ? 1.0 : ((double) theirChunk) / myChunk;
+		double spaceDiff = ((double) mySpace) / theirSpace;
 
-	public static List<String> getChecksums(byte[] chunk) {
-		List<String> checksums = new ArrayList<>();
-		int numChecksums = chunk.length / (8 * 1024);
-		if(chunk.length % (8 * 1024) > 0) {
-			numChecksums++;
-		}
-		int remainingBytes = chunk.length;
-		int start = 0;
-		for(int i = 0; i < numChecksums; i++) {
-			int length = 8 * 1024;
-			if(remainingBytes < length) length = remainingBytes;
-			try {
-				byte[] temp = Arrays.copyOfRange(chunk, start, start+length);
-				start = start + length;
-				checksums.add(SHAChecksum(temp));
-			}catch (NoSuchAlgorithmException nsae) {
-				nsae.printStackTrace();
-				break;
-			}catch (DigestException de) {
-				de.printStackTrace();
-				break;
+//		System.out.println("My Address: " + hostname + ":"+port + " Their Address: " + other.hostname + ":"+other.port);
+//		System.out.println("My CHunks:" + myChunk + " Their Chunks: " + theirChunk + " diff: " + chunkDiff + " space: " + spaceDiff);
+		if (spaceDiff < 1.0 && chunkDiff < 1.0) { //if they have more space and less chunks, they go first
+			return 1;
+		} else if (spaceDiff > 1.0 && chunkDiff > 1.0) { //if I have more space and less chunks, I go first
+			return -1;
+		} else if (chunkDiff > (3.0 / 4.0) && chunkDiff < (4.0 / 3.0)) { //if chunk numbers are similar
+			if (spaceDiff > 2.0) { //I have a lot more space
+				return -1;
+			} else if (spaceDiff < 0.5) { //they have a lot more space
+				return 1;
 			}
-
-
+		} else if (spaceDiff > 0.5 && spaceDiff < 2.0) { //if space free is similar
+			if (chunkDiff < 3.0 / 4.0) { //they have a lot fewer chunks
+				return 1;
+			} else if (chunkDiff > (4.0 / 3.0)) { //I have a lot fewer chunks
+				return -1;
+			}
 		}
-		return checksums;
+
+		int rand = ThreadLocalRandom.current().nextInt(1, 3); //if all aspects are similar return random order
+		if (rand == 1) return -1;
+		else return 1;
 	}
 
-	public static String SHAChecksum(byte[] bytes) throws NoSuchAlgorithmException, DigestException{
+//	public static List<String> getChecksums(byte[] chunk) {
+//		List<String> checksums = new ArrayList<>();
+//		int numChecksums = chunk.length / (8 * 1024);
+//		if(chunk.length % (8 * 1024) > 0) {
+//			numChecksums++;
+//		}
+//		int remainingBytes = chunk.length;
+//		int start = 0;
+//		for(int i = 0; i < numChecksums; i++) {
+//			int length = 8 * 1024;
+//			if(remainingBytes < length) length = remainingBytes;
+//			try {
+//				byte[] temp = Arrays.copyOfRange(chunk, start, start+length);
+//				start = start + length;
+//				checksums.add(SHAChecksum(temp));
+//			}catch (NoSuchAlgorithmException nsae) {
+//				nsae.printStackTrace();
+//				break;
+//			}catch (DigestException de) {
+//				de.printStackTrace();
+//				break;
+//			}
+//
+//
+//		}
+//		return checksums;
+//	}
+
+	public static String SHAChecksum(byte[] bytes) throws NoSuchAlgorithmException, DigestException {
 		MessageDigest messageDigest = MessageDigest.getInstance("SHA-1");
 		return hashToHexString(messageDigest.digest(bytes));
 	}
@@ -112,20 +149,11 @@ public class ChunkUtil implements Comparable<ChunkUtil>{
 
 		StringBuilder builder = new StringBuilder(hashNumber.toString(16));
 
-		while(builder.length() < 40) {
+		while (builder.length() < 40) {
 			builder.insert(0, '0');
 		}
 
 		return builder.toString();
 	}
 
-	public static boolean getCorruptedFromChecksums(List<String> check1, List<String> check2) {
-		for(int i = 0; i < check1.size(); i++) {
-			if(!check1.get(i).equals(check2.get(i))) {
-				System.out.println("Found corrupted chunk");
-				return true;
-			}
-		}
-		return false;
-	}
 }

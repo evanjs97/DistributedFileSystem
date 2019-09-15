@@ -155,6 +155,7 @@ public class ClientServer implements Server{
 			for (long i = 0; i < chunks; i++) {
 				MessagingUtil.handleChunkLocationRequest(sender, filename+"_chunk_"+i, port);
 			}
+			sender.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}

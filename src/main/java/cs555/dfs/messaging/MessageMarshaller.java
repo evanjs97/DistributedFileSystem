@@ -28,6 +28,10 @@ public class MessageMarshaller {
 		dout.writeBoolean(value);
 	}
 
+	public void writeLong(long value) throws IOException {
+		dout.writeLong(value);
+	}
+
 	public void writeInstant(Instant time) throws IOException {
 		writeString(time.toString());
 	}
