@@ -37,10 +37,8 @@ public class TCPReceiver implements Runnable {
 		while (socket != null && socket.isConnected()) {
 			try {
 				dataLength = din.readInt();
-
 				byte[] data = new byte[dataLength];
 				din.readFully(data, 0, dataLength);
-
 				Event event = EventFactory.getInstance().getEvent(data);
 				server.onEvent(event, socket);
 			} catch(EOFException eofe) {

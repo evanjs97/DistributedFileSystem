@@ -4,7 +4,7 @@ HOME="$( cd "$( dirname "$0" )" && pwd )"
 
 SERVER="juneau"
 PORT="45467"
-CLIENT="raleigh"
+CLIENT="little-rock"
 CHUNK_SERVERS_PER_MACHINE=1
 CHUNK_DIR="/tmp/evanjs"
 

@@ -13,9 +13,9 @@ public class ChunkServerHeartbeat implements Event{
 //	private final Type type;
 	private final List<FileMetadata> fileInfo;
 	private final int port;
-	private final long freeDiskSpace;
+	private final double freeDiskSpace;
 
-	public ChunkServerHeartbeat(List<FileMetadata> fileInfo, int port, long freeDiskSpace) {
+	public ChunkServerHeartbeat(List<FileMetadata> fileInfo, int port, double freeDiskSpace) {
 		this.fileInfo = Collections.unmodifiableList(fileInfo);
 		this.port = port;
 		this.freeDiskSpace = freeDiskSpace;
@@ -29,17 +29,17 @@ public class ChunkServerHeartbeat implements Event{
 		return port;
 	}
 
-	public long getFreeDiskSpace() { return this.freeDiskSpace; }
+	public double getFreeDiskSpace() { return this.freeDiskSpace; }
 
 	public ChunkServerHeartbeat(DataInputStream din) {
 		List<FileMetadata> fileInfo = new LinkedList<>();
 		int port = 0;
-		long freeSpace = 0;
+		double freeSpace = 0;
 		try {
 			MessageReader messageReader = new MessageReader(din);
 			port = messageReader.readInt();
-			freeSpace = messageReader.readLong();
-			messageReader.readMetadataList(fileInfo);
+			freeSpace = messageReader.readDouble();
+			messageReader.readFileMetadataList(fileInfo);
 			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
@@ -69,8 +69,8 @@ public class ChunkServerHeartbeat implements Event{
 		MessageMarshaller messageMarshaller = new MessageMarshaller();
 		messageMarshaller.writeInt(getType().getValue());
 		messageMarshaller.writeInt(port);
-		messageMarshaller.writeLong(freeDiskSpace);
-		messageMarshaller.writeMetadataList(fileInfo);
+		messageMarshaller.writeDouble(freeDiskSpace);
+		messageMarshaller.writeFileMetadataList(fileInfo);
 		return messageMarshaller.getMarshalledData();
 	}
 

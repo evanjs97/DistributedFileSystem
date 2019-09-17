@@ -66,6 +66,7 @@ public class ClientServer implements Server{
 				Socket socket = new Socket(controllerHostname, controllerPort);
 				TCPSender sender = new TCPSender(socket);
 				MessagingUtil.handleChunkLocationRequest(sender, response.getFilename(), port);
+				socket.close();
 			}catch(IOException ioe) {
 				ioe.printStackTrace();
 			}

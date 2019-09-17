@@ -4,12 +4,13 @@ import cs555.dfs.messaging.*;
 import cs555.dfs.transport.TCPHeartbeat;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
-import cs555.dfs.util.ChunkUtil;
-import cs555.dfs.util.FileMetadata;
-import cs555.dfs.util.Heartbeat;
+import cs555.dfs.util.*;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -58,35 +59,23 @@ public class ControllerServer implements Server{
 		heartbeatThread.start();
 	}
 
-	private synchronized void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
+	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
 		SetIndexPair util = fileToServers.getOrDefault(request.getFilename(), null);
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 
 		if(util != null) {
-			System.out.println("util null");
 			replicationServers.addAll(util.map);
 		}else {
 			for (int i = 0; i < replicationLevel; i++) {
 				replicationServers.add(chunkServers.pollFirst());
-//				synchronized (chunkServers) {
-//					if (!chunkServers.isEmpty()) {
-//						ChunkUtil chunk = chunkServers.pollFirst();
-//						chunk.incrementAssignedChunks();
-//						replicationServers.add(chunk);
-//						System.out.println("Adding server back: " + chunk.toString() + " SIZE: " + chunkServers.size());
-//						chunkServers.add(chunk);
-//					}
-//				}
 			}
-			System.out.println("SIZE: " + chunkServers.size());
 			chunkServers.addAll(replicationServers);
-			System.out.println("SIZE: " + chunkServers.size());
 		}
 
 		try {
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getHostName(), request.getPort()));
 			sender.sendData(new ChunkDestinationResponse(replicationServers, request.getFilename()).getBytes());
-			sender.flush();
+			sender.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
@@ -97,20 +86,21 @@ public class ControllerServer implements Server{
 		addChunkServer(request.getHostname(), request.getPort(), request.getFreeSpace());
 	}
 
-	private void addChunkServer(String hostname, int port, long freeSpace) {
+	private void addChunkServer(String hostname, int port, double freeSpace) {
 		ChunkUtil chunkUtil = new ChunkUtil(hostname, port, freeSpace);
+
 
 		this.chunkServers.add(chunkUtil);
 		this.hostToServerObject.put(hostname + ":" + port, chunkUtil);
 	}
 
-//	private void handleMajorHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
-//		handleMinorHeartbeat(heartbeat, socket);
-		//System.out.println(heartbeat);
-//	}
-
 	private void handleChunkServerHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
-		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort() + " Free Space: " + heartbeat.getFreeDiskSpace());
+//		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort() + " Free Space: " + heartbeat.getFreeDiskSpace());
+		StringBuilder builder = new StringBuilder();
+		String hostFormat = Format.format(socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort(), 20);
+		String spaceFormat = Format.format(String.format("%.2f",heartbeat.getFreeDiskSpace()), 7);
+		builder.append(String.format("Host: %s, Free Space: %s\n",hostFormat, spaceFormat));
+
 		String key = socket.getInetAddress().getCanonicalHostName() + ":" + heartbeat.getPort();
 		if(!hostToServerObject.containsKey(key)) {
 			addChunkServer(socket.getInetAddress().getCanonicalHostName(), heartbeat.getPort(), heartbeat.getFreeDiskSpace());
@@ -119,14 +109,18 @@ public class ControllerServer implements Server{
 		chunkUtil.setFreeSpace(heartbeat.getFreeDiskSpace());
 
 		for(FileMetadata metadata : heartbeat.getFileInfo()) {
-			fileToServers.putIfAbsent(metadata.getFilename(), new SetIndexPair(new ConcurrentSkipListSet<>(), new ArrayList<>()));
-			boolean added = fileToServers.get(metadata.getFilename()).map.add(chunkUtil);
-			if(added) {
-				fileToServers.get(metadata.getFilename()).index.add(chunkUtil);
-			}
+			for(ChunkMetadata chunkMetadata : metadata.getChunks()) {
+				String fullFile = metadata.getFilename() + "_chunk_"+chunkMetadata.getChunkNum();
+				fileToServers.putIfAbsent(fullFile, new SetIndexPair(new ConcurrentSkipListSet<>(), new ArrayList<>()));
+				boolean added = fileToServers.get(fullFile).map.add(chunkUtil);
+				if(added) {
+					fileToServers.get(fullFile).index.add(chunkUtil);
+				}
 
-			hostToFiles.putIfAbsent(chunkUtil, new LinkedList<>());
-			hostToFiles.get(chunkUtil).add(metadata.getFilename());
+				hostToFiles.putIfAbsent(chunkUtil, new LinkedList<>());
+				hostToFiles.get(chunkUtil).add(fullFile);
+			}
+			System.out.println(builder.toString()+metadata.toString());
 		}
 	}
 
@@ -152,12 +146,12 @@ public class ControllerServer implements Server{
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
 			if(util != null) {
 				sender.sendData(new ChunkLocationResponse(util.getHostname(), util.getPort(), true, request.getFilename()).getBytes());
-				sender.flush();
+				sender.close();
 
 			}else {
 				System.err.println("Controller: Unable to find the chunks location for" + request.getFilename());
 				sender.sendData(new ChunkLocationResponse("", 0, false, request.getFilename()).getBytes());
-				sender.flush();
+				sender.close();
 			}
 		}catch(IOException ioe) {
 			ioe.printStackTrace();

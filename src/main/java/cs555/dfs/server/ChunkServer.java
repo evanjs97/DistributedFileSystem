@@ -5,7 +5,7 @@ import cs555.dfs.transport.TCPHeartbeat;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
-import cs555.dfs.util.FileMetadata;
+import cs555.dfs.util.ChunkMetadata;
 import cs555.dfs.util.Heartbeat;
 
 import java.io.*;
@@ -14,6 +14,7 @@ import java.security.DigestException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 public class ChunkServer implements Server{
@@ -21,8 +22,8 @@ public class ChunkServer implements Server{
 	private final String hostname;
 	private final int hostPort;
 	private int port;
-	private final ConcurrentSkipListSet<String> files = new ConcurrentSkipListSet<>();
-	private final ConcurrentSkipListSet<String> newFiles = new ConcurrentSkipListSet<>();
+	private final ConcurrentHashMap<String, ConcurrentSkipListSet<Integer>> files = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentSkipListSet<Integer>> newFiles = new ConcurrentHashMap<>();
 	private static final int CHECKSUM_SLICE = 8 * 1024;
 	private static final int CHECKSUM = 40;
 
@@ -33,14 +34,14 @@ public class ChunkServer implements Server{
 		this.hostPort = port;
 		this.BASE_DIR = dataDir;
 	}
-
-	public Set<String> getRecentFiles() {
-		return this.newFiles;
-	}
-
-	public Set<String> getAllFiles() {
-		return files;
-	}
+//
+//	public Set<String> getRecentFiles() {
+//		return this.newFiles;
+//	}
+//
+//	public Set<String> getAllFiles() {
+//		return files;
+//	}
 
 	public final int getPort() {
 		return port;
@@ -81,7 +82,7 @@ public class ChunkServer implements Server{
 	private void register(String hostname, int port) {
 		try {
 			TCPSender sender = new TCPSender(new Socket(this.hostname, this.hostPort));
-			long freeSpace = FileMetadata.getAvailableDiskSpace(BASE_DIR);
+			long freeSpace = ChunkMetadata.getAvailableDiskSpace(BASE_DIR);
 			sender.sendData(new RegisterRequest(hostname, port, freeSpace).getBytes());
 			sender.close();
 		}catch (IOException ioe) {
@@ -120,10 +121,10 @@ public class ChunkServer implements Server{
 
 		try {
 			TCPSender sender = new TCPSender(new Socket(request.getDestHost(), request.getDestPort()));
-			Instant lastModified = FileMetadata.getLastModifiedTime(BASE_DIR+request.getFilename());
+			Instant lastModified = ChunkMetadata.getLastModifiedTime(BASE_DIR+request.getFilename());
 			ChunkWriteRequest cwr = new ChunkWriteRequest(new LinkedList<>(), request.getFilename(), chunkRead.bytes, lastModified);
 			sender.sendData(cwr.getBytes());
-			sender.flush();
+			sender.close();
 		}catch(IOException ioe) {
 			System.out.println("Failed to send to: " + request.getDestHost() + ":"+request.getDestPort());
 		}
@@ -141,7 +142,7 @@ public class ChunkServer implements Server{
 			forwardChunk(request);
 		}
 		writeFile(request.getChunkData(), request.getFilename());
-		FileMetadata.setLastModifiedTime(BASE_DIR+request.getFilename(), request.getLastModified());
+		ChunkMetadata.setLastModifiedTime(BASE_DIR+request.getFilename(), request.getLastModified());
 	}
 
 	/**
@@ -182,10 +183,15 @@ public class ChunkServer implements Server{
 			raFile.write(chunk);
 			raFile.setLength(chunk.length+(numChecksums*CHECKSUM));
 
-			newFiles.add(filename);
-			files.add(filename);
+			String actualFile = filename.substring(0, filename.lastIndexOf("_chunk_"));
+			int chunkNum = Integer.parseInt(filename.substring(filename.lastIndexOf('_')+1));
+			newFiles.putIfAbsent(actualFile, new ConcurrentSkipListSet<>());
+			files.putIfAbsent(actualFile, new ConcurrentSkipListSet<>());
+
+			newFiles.get(actualFile).add(chunkNum);
+			files.get(actualFile).add(chunkNum);
 			raFile.close();
-			FileMetadata.incrementVersion(BASE_DIR+filename+".metadata");
+			ChunkMetadata.incrementVersion(BASE_DIR+filename+".metadata");
 		}catch(FileNotFoundException fnfe) {
 			fnfe.printStackTrace();
 		}catch(IOException ioe) {
@@ -241,6 +247,7 @@ public class ChunkServer implements Server{
 		try {
 			TCPSender sender = new TCPSender(new Socket(hostname, hostPort));
 			MessagingUtil.handleChunkLocationRequest(sender, filename, port);
+			sender.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}

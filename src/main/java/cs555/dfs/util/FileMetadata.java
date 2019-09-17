@@ -1,134 +1,82 @@
 package cs555.dfs.util;
 
-
 import cs555.dfs.messaging.MessageMarshaller;
 import cs555.dfs.messaging.MessageReader;
 
-import java.io.*;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
-import java.nio.file.attribute.FileTime;
+import java.io.IOException;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class FileMetadata {
-
 	private final String filename;
-	private Instant lastModified;
-	private final int version;
-
-	private FileMetadata(String filename, Instant lastModified, int version) {
-		this.filename = filename;
-		this.lastModified = lastModified;
-		this.version = version;
-	}
+	private List<ChunkMetadata> chunks = new ArrayList<>();
+	private Instant lastModified = null;
+	private int version = 1;
 
 	public String getFilename() {
-		return this.filename;
+		return filename;
 	}
 
-	public int getVersion() { return this.version; }
-
-	public Instant getLasModified() {
-		return this.lastModified;
+	public List<ChunkMetadata> getChunks() {
+		return chunks;
 	}
 
-	public FileMetadata(MessageReader messageReader) {
-		String filename = "";
-		Instant lastModified = null;
-		int version = 0;
-		try {
-			filename = messageReader.readString();
-			lastModified = messageReader.readInstant();
-			version = messageReader.readInt();
-
-		}catch(IOException ioe) {
-			ioe.printStackTrace();
-		}
-		this.filename = filename;
-		this.lastModified = lastModified;
-		this.version = version;
+	public Instant getLastModified() {
+		return lastModified;
 	}
 
-	public static FileMetadata getFileMetadata(String baseDir, String filename) {
-		try {
-			Instant lastModified = Files.getLastModifiedTime(FileSystems.getDefault()
-					.getPath(baseDir+filename), LinkOption.NOFOLLOW_LINKS).toInstant();
-			return new FileMetadata(filename, lastModified, getFileVersion(new RandomAccessFile(baseDir+filename+".metadata", "r")));
-		}catch(IOException ioe) {
-			ioe.printStackTrace();
-		}
-		return null;
-	}
-
-	public static int getFileVersion(RandomAccessFile raFile) {
-		int version = 1;
-		try {
-			raFile.seek(0);
-			if(raFile.length() > 0) {
-				return raFile.readInt();
-			}
-		}catch(IOException ioe) {
-			ioe.printStackTrace();
-		}
+	public int getVersion() {
 		return version;
 	}
 
-	public static void incrementVersion(String path) {
-		try {
-			RandomAccessFile raFile = new RandomAccessFile(path, "rw");
-			int version = getFileVersion(raFile) +1;
-			raFile.seek(0);
-			raFile.writeInt(version);
-			raFile.setLength(4);
-			raFile.close();
-		}catch(IOException ioe) {
-			ioe.printStackTrace();
+	public FileMetadata(String filename) {
+		this.filename = filename;
+	}
+
+	public void addChunk(ChunkMetadata metadata) {
+		chunks.add(metadata);
+		if(lastModified == null || metadata.getLastModified().isAfter(lastModified)) {
+			lastModified = metadata.getLastModified();
 		}
+		version = Math.max(version, metadata.getVersion());
 	}
 
-	public static long getAvailableDiskSpace(String path) {
-		return new File(path).getFreeSpace();
-	}
-//
-//	public static FileMetadata getFileMetadata(String path) {
-//
-//		Instant lastModified = getLastModifiedTime(path);
-//		int version = 0;
-//		try {
-//			version = getFileVersion(new RandomAccessFile(path+".metadata", "r"));
-//		} catch(FileNotFoundException fnfe) {
-//			fnfe.printStackTrace();
-//		}
-//		return new FileMetadata(path.substring(path.lastIndexOf("/")+1), lastModified, version);
-//	}
-
-	public static void setLastModifiedTime(String path, Instant time) {
+	public void writeToStream(MessageMarshaller messageMarshaller) {
 		try {
-			Files.setLastModifiedTime(FileSystems.getDefault()
-					.getPath(path), FileTime.from(time));
+			messageMarshaller.writeString(filename);
+			messageMarshaller.writeInstant(lastModified);
+			messageMarshaller.writeInt(version);
+			messageMarshaller.writeChunkMetadataList(chunks);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
-
-	public static Instant getLastModifiedTime(String path) {
-		try {
-			return Files.getLastModifiedTime(FileSystems.getDefault()
-					.getPath(path), LinkOption.NOFOLLOW_LINKS).toInstant();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return null;
 	}
 
 	public String toString() {
-		return this.filename + "version: " + version + " last modified at " + lastModified;
+		String time = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
+				.withZone(ZoneId.systemDefault()).format(lastModified);
+		return String.format("	--%s  chunks:%s version: %d   last modified: %s", filename, chunks.toString(), version, time);
 	}
 
-	public void writeToStream(MessageMarshaller messageMarshaller) throws IOException{
-		messageMarshaller.writeString(filename);
-		messageMarshaller.writeInstant(lastModified);
-		messageMarshaller.writeInt(version);
+	public FileMetadata(MessageReader reader) {
+		String filename = "";
+		Instant time = null;
+		int version = 0;
+		try {
+			filename = reader.readString();
+			time = reader.readInstant();
+			version = reader.readInt();
+			reader.readChunkMetadataList(chunks);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		this.filename =filename;
+		this.lastModified = time;
+		this.version = version;
 	}
 }

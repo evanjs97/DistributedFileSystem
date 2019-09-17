@@ -90,7 +90,6 @@ public class ControllerHeartbeatTask implements HeartbeatTask{
 	}
 
 	private ChunkUtil findRandomDestination(String filename) {
-		System.out.println("TEST");
 		synchronized (chunkServers) {
 			if(chunkServers.isEmpty()) return null;
 			ChunkUtil util = chunkServers.pollFirst();

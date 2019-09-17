@@ -1,5 +1,6 @@
 package cs555.dfs.messaging;
 
+import cs555.dfs.util.ChunkMetadata;
 import cs555.dfs.util.ChunkUtil;
 import cs555.dfs.util.FileMetadata;
 
@@ -28,6 +29,10 @@ public class MessageReader {
 		return din.readLong();
 	}
 
+	public double readDouble() throws IOException {
+		return din.readDouble();
+	}
+
 	public Instant readInstant() throws IOException {
 		return Instant.parse(readString());
 	}
@@ -42,7 +47,14 @@ public class MessageReader {
 		return bytes;
 	}
 
-	public void readMetadataList(List<FileMetadata> fileInfo) throws IOException {
+	public void readChunkMetadataList(List<ChunkMetadata> fileInfo) throws IOException {
+		int listSize = din.readInt();
+		for(int i = 0; i < listSize; i++) {
+			fileInfo.add(new ChunkMetadata(this));
+		}
+	}
+
+	public void readFileMetadataList(List<FileMetadata> fileInfo) throws IOException {
 		int listSize = din.readInt();
 		for(int i = 0; i < listSize; i++) {
 			fileInfo.add(new FileMetadata(this));

@@ -15,9 +15,9 @@ public class ChunkUtil implements Comparable<ChunkUtil> {
 	private final AtomicInteger assignedChunks = new AtomicInteger(0);
 	private final String hostname;
 	private final int port;
-	private long freeSpace;
+	private double freeSpace;
 
-	public ChunkUtil(String hostname, int port, long freeSpace) {
+	public ChunkUtil(String hostname, int port, double freeSpace) {
 		this.hostname = hostname;
 		this.port = port;
 		this.freeSpace = freeSpace;
@@ -27,11 +27,11 @@ public class ChunkUtil implements Comparable<ChunkUtil> {
 		return this.assignedChunks.incrementAndGet();
 	}
 
-	public synchronized final void setFreeSpace(long freeSpace) {
+	public synchronized final void setFreeSpace(double freeSpace) {
 		this.freeSpace = freeSpace;
 	}
 
-	public synchronized final long getFreeSpace() {
+	public synchronized final double getFreeSpace() {
 		return this.freeSpace;
 	}
 
@@ -51,19 +51,18 @@ public class ChunkUtil implements Comparable<ChunkUtil> {
 	public void writeChunkToStream(MessageMarshaller messageMarshaller) throws IOException {
 		messageMarshaller.writeString(hostname);
 		messageMarshaller.writeInt(port);
-		messageMarshaller.writeLong(freeSpace);
+		messageMarshaller.writeDouble(freeSpace);
 	}
 
 	public static ChunkUtil readChunkFromStream(MessageReader reader) throws IOException {
 		String host = reader.readString();
 		int port = reader.readInt();
-		long freeSpace = reader.readLong();
+		double freeSpace = reader.readDouble();
 		return new ChunkUtil(host, port, freeSpace);
 	}
 
 	@Override
 	public boolean equals(Object o) {
-		System.out.println("Checking equality: " + hostname);
 		if (o instanceof ChunkUtil) {
 
 			ChunkUtil d = (ChunkUtil) o;
@@ -81,13 +80,11 @@ public class ChunkUtil implements Comparable<ChunkUtil> {
 	public int compareTo(ChunkUtil other) {
 		int myChunk = this.assignedChunks.get();
 		int theirChunk = other.assignedChunks.get();
-		long mySpace = this.getFreeSpace();
-		long theirSpace = other.getFreeSpace();
+		double mySpace = this.getFreeSpace();
+		double theirSpace = other.getFreeSpace();
 		double chunkDiff = (myChunk == 0 || theirChunk == 0) ? 1.0 : ((double) theirChunk) / myChunk;
-		double spaceDiff = ((double) mySpace) / theirSpace;
+		double spaceDiff = mySpace / theirSpace;
 
-//		System.out.println("My Address: " + hostname + ":"+port + " Their Address: " + other.hostname + ":"+other.port);
-//		System.out.println("My CHunks:" + myChunk + " Their Chunks: " + theirChunk + " diff: " + chunkDiff + " space: " + spaceDiff);
 		if (spaceDiff < 1.0 && chunkDiff < 1.0) { //if they have more space and less chunks, they go first
 			return 1;
 		} else if (spaceDiff > 1.0 && chunkDiff > 1.0) { //if I have more space and less chunks, I go first

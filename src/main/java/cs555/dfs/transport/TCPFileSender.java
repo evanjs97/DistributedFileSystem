@@ -1,19 +1,15 @@
 package cs555.dfs.transport;
 
 import cs555.dfs.messaging.ChunkWriteRequest;
+import cs555.dfs.util.ChunkMetadata;
 import cs555.dfs.util.ChunkUtil;
-import cs555.dfs.util.FileMetadata;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.Socket;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class TCPFileSender {
@@ -35,11 +31,13 @@ public class TCPFileSender {
 	private final long fileSize;
 	private final int numChunks;
 	private final int bufferSize = 64 * 1024;
+	private final int PRINT_INTERVAL;
+
 
 
 	public TCPFileSender(String filename, String destination) throws IOException{
 		this.filename = filename;
-		this.lastModified = FileMetadata.getLastModifiedTime(filename);
+		this.lastModified = ChunkMetadata.getLastModifiedTime(filename);
 
 		file = new RandomAccessFile(filename, "r");
 		fileSize = file.length();
@@ -50,6 +48,7 @@ public class TCPFileSender {
 		this.destination = destination;
 		this.chunks = new LinkedList[numChunks];
 		chunkCount = new AtomicInteger(0);
+		this.PRINT_INTERVAL = numChunks / 10;
 	}
 
 	public long getNumChunks() {
@@ -61,6 +60,9 @@ public class TCPFileSender {
 			chunks[index] = locations;
 		}
 		int count = chunkCount.incrementAndGet();
+		if(count % PRINT_INTERVAL == 0) {
+			System.out.print("---");
+		}
 		if(count == this.numChunks) {
 			sendFile();
 		}
@@ -72,7 +74,6 @@ public class TCPFileSender {
 
 			long bytesRemaining = fileSize;
 			System.out.println("Sending " + numChunks + " chunks");
-			System.out.println("Total file size: " + fileSize);
 			for(int i = 0; i < numChunks; i++) {
 				byte[] chunk;
 				if(bytesRemaining >= bufferSize) {
@@ -92,6 +93,9 @@ public class TCPFileSender {
 				sender.sendData(request.getBytes());
 				sender.flush();
 				bytesRemaining-=chunk.length;
+			}
+			for(TCPSender sender : senders.values()) {
+				sender.close();
 			}
 			System.out.println("Finished Sending File");
 		}catch(IOException ioe) {
