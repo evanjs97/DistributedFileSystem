@@ -105,7 +105,10 @@ public class ControllerHeartbeatTask implements HeartbeatTask{
 			}
 
 			TCPSender sender = senders.remove(util.toString());
+
+			server.getHostToServerObject().remove(util.toString());
 			util.incrementAssignedChunks();
+			server.getHostToServerObject().put(util.toString(), util);
 			if(sender != null) senders.put(util.toString(), sender);
 
 			added.add(util);

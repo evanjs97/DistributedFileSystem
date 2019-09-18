@@ -56,9 +56,22 @@ public class ControllerServer implements Server{
 		return chunkServers;
 	}
 
+//	public void addRemoveIncrement(String host) {
+//		ChunkUtil util = this.hostToServerObject.remove(host);
+//		chunkServers.remove(hostToServerObject.get(util));
+//		util.incrementAssignedChunks();
+//		this.hostToServerObject.put(host, util);
+//		this.chunkServers.add(util);
+//	}
+
 	public boolean removeChunkUtil(String name) {
 		return chunkServers.remove(hostToServerObject.get(name));
 	}
+//
+//	public void addChunkUtil(String host, ChunkUtil util) {
+//		this.hostToServerObject.put(host, util);
+//		this.chunkServers.add(util);
+//	}
 
 	public ControllerServer(int port) {
 		this.port = port;
