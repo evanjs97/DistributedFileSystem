@@ -8,9 +8,6 @@ import cs555.dfs.util.*;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -35,13 +32,33 @@ public class ControllerServer implements Server{
 			this.index = index;
 		}
 	}
-
-	private final ConcurrentHashMap<String, SetIndexPair> fileToServers = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentSkipListSet<String>> fileToServers = new ConcurrentHashMap<>();
+//	private final ConcurrentHashMap<String, SetIndexPair> fileToServers = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ChunkUtil> hostToServerObject = new ConcurrentHashMap<>();
-	private final ConcurrentHashMap<ChunkUtil, List<String>> hostToFiles = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, List<String>> hostToFiles = new ConcurrentHashMap<>();
 	private ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
 	private final int replicationLevel = 3;
 	private final int port;
+
+	public ConcurrentHashMap<String, ConcurrentSkipListSet<String>> getFileToServers() {
+		return fileToServers;
+	}
+
+	public ConcurrentHashMap<String, ChunkUtil> getHostToServerObject() {
+		return hostToServerObject;
+	}
+
+	public ConcurrentHashMap<String, List<String>> getHostToFiles() {
+		return hostToFiles;
+	}
+
+	public ConcurrentSkipListSet<ChunkUtil> getChunkServers() {
+		return chunkServers;
+	}
+
+	public boolean removeChunkUtil(String name) {
+		return chunkServers.remove(hostToServerObject.get(name));
+	}
 
 	public ControllerServer(int port) {
 		this.port = port;
@@ -53,23 +70,36 @@ public class ControllerServer implements Server{
 		server.start();
 
 		List<Heartbeat> heartbeatList = new LinkedList<>();
-		heartbeatList.add(new Heartbeat(45, new ControllerHeartbeatTask(hostToFiles, fileToServers, chunkServers)));
+		heartbeatList.add(new Heartbeat(45, new ControllerHeartbeatTask(this)));
 		TCPHeartbeat heartbeat = new TCPHeartbeat(heartbeatList);
 		Thread heartbeatThread = new Thread(heartbeat);
 		heartbeatThread.start();
 	}
 
 	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
-		SetIndexPair util = fileToServers.getOrDefault(request.getFilename(), null);
+//		SetIndexPair util = fileToServers.getOrDefault(request.getFilename(), null);
+		ConcurrentSkipListSet<String> servers = fileToServers.getOrDefault(request.getFilename(), null);
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 
-		if(util != null) {
-			replicationServers.addAll(util.map);
-		}else {
-			for (int i = 0; i < replicationLevel; i++) {
-				replicationServers.add(chunkServers.pollFirst());
+		if(servers != null) {
+			for(String server : servers) {
+				replicationServers.add(hostToServerObject.get(server));
 			}
-			chunkServers.addAll(replicationServers);
+
+//			replicationServers.addAll(servers.);
+		}else {
+			synchronized (chunkServers) {
+				for (int i = 0; i < replicationLevel; i++) {
+					if(!chunkServers.isEmpty()) {
+						ChunkUtil dest = chunkServers.pollFirst();
+						hostToServerObject.remove(dest.toString());
+						dest.incrementAssignedChunks();
+						replicationServers.add(dest);
+						hostToServerObject.put(dest.toString(), dest);
+					}
+				}
+				chunkServers.addAll(replicationServers);
+			}
 		}
 
 		try {
@@ -99,29 +129,38 @@ public class ControllerServer implements Server{
 		StringBuilder builder = new StringBuilder();
 		String hostFormat = Format.format(socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort(), 20);
 		String spaceFormat = Format.format(String.format("%.2f",heartbeat.getFreeDiskSpace()), 7);
-		builder.append(String.format("Host: %s, Free Space: %s\n",hostFormat, spaceFormat));
+		builder.append(String.format("Host: %s, Free Space: %sGB\n",hostFormat, spaceFormat));
 
 		String key = socket.getInetAddress().getCanonicalHostName() + ":" + heartbeat.getPort();
 		if(!hostToServerObject.containsKey(key)) {
 			addChunkServer(socket.getInetAddress().getCanonicalHostName(), heartbeat.getPort(), heartbeat.getFreeDiskSpace());
 		}
-		ChunkUtil chunkUtil = hostToServerObject.get(key);
+		ChunkUtil chunkUtil = hostToServerObject.remove(key);
+		chunkServers.remove(chunkUtil);
+
 		chunkUtil.setFreeSpace(heartbeat.getFreeDiskSpace());
+		hostToServerObject.put(key, chunkUtil);
+		chunkServers.add(chunkUtil);
 
 		for(FileMetadata metadata : heartbeat.getFileInfo()) {
 			for(ChunkMetadata chunkMetadata : metadata.getChunks()) {
 				String fullFile = metadata.getFilename() + "_chunk_"+chunkMetadata.getChunkNum();
-				fileToServers.putIfAbsent(fullFile, new SetIndexPair(new ConcurrentSkipListSet<>(), new ArrayList<>()));
-				boolean added = fileToServers.get(fullFile).map.add(chunkUtil);
-				if(added) {
-					fileToServers.get(fullFile).index.add(chunkUtil);
-				}
+//				fileToServers.putIfAbsent(fullFile, new SetIndexPair(new ConcurrentSkipListSet<>(), new ArrayList<>()));
+//				boolean added = fileToServers.get(fullFile).map.add(chunkUtil);
+//				if(added) {
+//					fileToServers.get(fullFile).index.add(chunkUtil);
+//				}
+				fileToServers.putIfAbsent(fullFile, new ConcurrentSkipListSet<>());
+				fileToServers.get(fullFile).add(chunkUtil.toString());
 
-				hostToFiles.putIfAbsent(chunkUtil, new LinkedList<>());
-				hostToFiles.get(chunkUtil).add(fullFile);
+				hostToFiles.putIfAbsent(chunkUtil.toString(), new LinkedList<>());
+				hostToFiles.get(chunkUtil.toString()).add(fullFile);
 			}
-			System.out.println(builder.toString()+metadata.toString());
+
+			builder.append(metadata.toString());
+			builder.append('\n');
 		}
+		System.out.println(builder.toString());
 	}
 
 	/**
@@ -132,7 +171,10 @@ public class ControllerServer implements Server{
 	 * @param socket the socket the request was received over
 	 */
 	private void handleChunkLocationRequest(ChunkLocationRequest request, Socket socket) {
-		ArrayList<ChunkUtil> fileServers = fileToServers.get(request.getFilename()).index;
+		ArrayList<ChunkUtil> fileServers = new ArrayList<>();
+		for(String server : fileToServers.get(request.getFilename())) {
+			fileServers.add(hostToServerObject.get(server));
+		}
 		int random = ThreadLocalRandom.current().nextInt(0, fileServers.size());
 		ChunkUtil util = fileServers.get(random);
 

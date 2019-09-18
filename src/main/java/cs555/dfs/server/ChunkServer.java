@@ -137,7 +137,9 @@ public class ChunkServer implements Server{
 	 * @param request the chunk write request
 	 */
 	private void writeChunk(ChunkWriteRequest request) {
-		System.out.println("Writing File: " + request.getFilename());
+		if(this.files.containsKey(request.getFilename())) {
+			System.out.println("Writing Duplicate File: " + request.getFilename());
+		}
 		if(!request.getLocations().isEmpty()) {
 			forwardChunk(request);
 		}
@@ -293,7 +295,7 @@ public class ChunkServer implements Server{
 				raFile.readFully(arr);
 				raFile.readFully(checksum);
 				if(!ChunkUtil.SHAChecksum(arr).equals(new String(checksum))) {
-					System.out.println("CORRUPTED: " + i + " CHUNKNUM: " + chunkNum);
+					System.out.println("Chunk Server: Detected corrupted file: " + filename + "at chunk: " + chunkNum);
 					corrupted = true;
 				}
 				chunkNum++;

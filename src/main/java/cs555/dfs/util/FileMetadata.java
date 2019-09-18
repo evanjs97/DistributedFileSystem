@@ -60,7 +60,7 @@ public class FileMetadata {
 	public String toString() {
 		String time = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
 				.withZone(ZoneId.systemDefault()).format(lastModified);
-		return String.format("	--%s  chunks:%s version: %d   last modified: %s", filename, chunks.toString(), version, time);
+		return String.format("	--%s  chunks:%d version: %d   last modified: %s", filename, chunks.size(), version, time);
 	}
 
 	public FileMetadata(MessageReader reader) {

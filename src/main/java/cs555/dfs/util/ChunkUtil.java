@@ -78,6 +78,8 @@ public class ChunkUtil implements Comparable<ChunkUtil> {
 
 	@Override
 	public int compareTo(ChunkUtil other) {
+		if(this.hostname.equals(other.hostname) && this.port == other.port) return 0;
+
 		int myChunk = this.assignedChunks.get();
 		int theirChunk = other.assignedChunks.get();
 		double mySpace = this.getFreeSpace();
