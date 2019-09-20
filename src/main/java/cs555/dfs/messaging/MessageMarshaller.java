@@ -3,6 +3,7 @@ package cs555.dfs.messaging;
 import cs555.dfs.util.ChunkMetadata;
 import cs555.dfs.util.ChunkUtil;
 import cs555.dfs.util.FileMetadata;
+import cs555.dfs.util.ShardMetadata;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -62,6 +63,12 @@ public class MessageMarshaller {
 	public void writeFileMetadataList(List<FileMetadata> list) throws IOException {
 		writeInt(list.size());
 		for(FileMetadata metadata : list) {
+			metadata.writeToStream(this);
+		}
+	}
+	public void writeShardMetadataList(List<ShardMetadata> list) throws IOException {
+		writeInt(list.size());
+		for(ShardMetadata metadata : list) {
 			metadata.writeToStream(this);
 		}
 	}

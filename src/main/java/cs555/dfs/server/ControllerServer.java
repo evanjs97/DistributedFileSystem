@@ -15,29 +15,29 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class ControllerServer implements Server{
 
-	public class SetIndexPair {
-		final ConcurrentSkipListSet<ChunkUtil> map;
-		final ArrayList<ChunkUtil> index;
-
-		public ArrayList<ChunkUtil> getIndex() {
-			 return index;
-		}
-
-		public ConcurrentSkipListSet<ChunkUtil> getMap() {
-			 return map;
-		}
-
-		SetIndexPair(ConcurrentSkipListSet<ChunkUtil> map, ArrayList<ChunkUtil> index) {
-			this.map = map;
-			this.index = index;
-		}
-	}
+//	public class SetIndexPair {
+//		final ConcurrentSkipListSet<ChunkUtil> map;
+//		final ArrayList<ChunkUtil> index;
+//
+//		public ArrayList<ChunkUtil> getIndex() {
+//			 return index;
+//		}
+//
+//		public ConcurrentSkipListSet<ChunkUtil> getMap() {
+//			 return map;
+//		}
+//
+//		SetIndexPair(ConcurrentSkipListSet<ChunkUtil> map, ArrayList<ChunkUtil> index) {
+//			this.map = map;
+//			this.index = index;
+//		}
+//	}
 	private final ConcurrentHashMap<String, ConcurrentSkipListSet<String>> fileToServers = new ConcurrentHashMap<>();
 //	private final ConcurrentHashMap<String, SetIndexPair> fileToServers = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ChunkUtil> hostToServerObject = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, List<String>> hostToFiles = new ConcurrentHashMap<>();
 	private ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
-	private final int replicationLevel = 3;
+//	private final int replicationLevel = 3;
 	private final int port;
 
 	public ConcurrentHashMap<String, ConcurrentSkipListSet<String>> getFileToServers() {
@@ -102,7 +102,7 @@ public class ControllerServer implements Server{
 //			replicationServers.addAll(servers.);
 		}else {
 			synchronized (chunkServers) {
-				for (int i = 0; i < replicationLevel; i++) {
+				for (int i = 0; i < request.getNumLocations(); i++) {
 					if(!chunkServers.isEmpty()) {
 						ChunkUtil dest = chunkServers.pollFirst();
 						hostToServerObject.remove(dest.toString());
@@ -158,22 +158,32 @@ public class ControllerServer implements Server{
 		for(FileMetadata metadata : heartbeat.getFileInfo()) {
 			for(ChunkMetadata chunkMetadata : metadata.getChunks()) {
 				String fullFile = metadata.getFilename() + "_chunk_"+chunkMetadata.getChunkNum();
+				for(ShardMetadata shardMetadata : chunkMetadata.getShardMetadata()) {
+					addFile(fullFile+"_"+shardMetadata.getShardNum(), chunkUtil);
+				}
+				if(chunkMetadata.getShardMetadata().isEmpty()) {
+					addFile(fullFile, chunkUtil);
+				}
 //				fileToServers.putIfAbsent(fullFile, new SetIndexPair(new ConcurrentSkipListSet<>(), new ArrayList<>()));
 //				boolean added = fileToServers.get(fullFile).map.add(chunkUtil);
 //				if(added) {
 //					fileToServers.get(fullFile).index.add(chunkUtil);
 //				}
-				fileToServers.putIfAbsent(fullFile, new ConcurrentSkipListSet<>());
-				fileToServers.get(fullFile).add(chunkUtil.toString());
 
-				hostToFiles.putIfAbsent(chunkUtil.toString(), new LinkedList<>());
-				hostToFiles.get(chunkUtil.toString()).add(fullFile);
 			}
 
 			builder.append(metadata.toString());
 			builder.append('\n');
 		}
 		System.out.println(builder.toString());
+	}
+
+	private void addFile(String fullFile, ChunkUtil chunkUtil) {
+		fileToServers.putIfAbsent(fullFile, new ConcurrentSkipListSet<>());
+		fileToServers.get(fullFile).add(chunkUtil.toString());
+
+		hostToFiles.putIfAbsent(chunkUtil.toString(), new LinkedList<>());
+		hostToFiles.get(chunkUtil.toString()).add(fullFile);
 	}
 
 	/**

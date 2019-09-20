@@ -1,5 +1,6 @@
 package cs555.dfs.transport;
 
+import cs555.dfs.erasure.SolomonErasure;
 import cs555.dfs.messaging.ChunkWriteRequest;
 import cs555.dfs.util.ChunkMetadata;
 import cs555.dfs.util.ChunkUtil;
@@ -32,10 +33,11 @@ public class TCPFileSender {
 	private final int numChunks;
 	private final int bufferSize = 64 * 1024;
 	private final int PRINT_INTERVAL;
+	private boolean replication = true;
 
 
 
-	public TCPFileSender(String filename, String destination) throws IOException{
+	public TCPFileSender(String filename, String destination, boolean replication) throws IOException{
 		this.filename = filename;
 		this.lastModified = ChunkMetadata.getLastModifiedTime(filename);
 
@@ -49,6 +51,8 @@ public class TCPFileSender {
 		this.chunks = new LinkedList[numChunks];
 		chunkCount = new AtomicInteger(0);
 		this.PRINT_INTERVAL = numChunks / 10;
+		this.replication = replication;
+		System.out.println("Creating File Sender with Replication: " + replication);
 	}
 
 	public long getNumChunks() {
@@ -68,6 +72,37 @@ public class TCPFileSender {
 		}
 	}
 
+	private void sendChunk(int size, RandomAccessFile file, LinkedList<ChunkUtil> locations, int chunkNum) throws IOException{
+		ChunkUtil dest = locations.pollFirst();
+
+		senders.putIfAbsent(dest, new TCPSender(new Socket(dest.getHostname(), dest.getPort())));
+		TCPSender sender = senders.get(dest);
+		byte[] chunk = new byte[size];
+
+		file.readFully(chunk);
+		ChunkWriteRequest request = new ChunkWriteRequest(locations,this.destination+"_chunk_"+chunkNum, chunk, lastModified);
+		sender.sendData(request.getBytes());
+		sender.flush();
+	}
+
+	private void sendShards(int size, RandomAccessFile file, LinkedList<ChunkUtil> locations, int chunkNum) {
+		try {
+			byte[][] shards = SolomonErasure.encode(file, size);
+			for(int i = 0; i < SolomonErasure.TOTAL_SHARDS; i++) {
+				ChunkUtil dest = locations.pollFirst();
+
+				senders.putIfAbsent(dest, new TCPSender(new Socket(dest.getHostname(), dest.getPort())));
+				TCPSender sender = senders.get(dest);
+				ChunkWriteRequest request = new ChunkWriteRequest(new LinkedList<>(),
+						this.destination+"_chunk_"+chunkNum+"_"+i, shards[i],lastModified, replication);
+				sender.sendData(request.getBytes());
+				sender.flush();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
 	private void sendFile() {
 
 		try {
@@ -75,24 +110,16 @@ public class TCPFileSender {
 			long bytesRemaining = fileSize;
 			System.out.println("Sending " + numChunks + " chunks");
 			for(int i = 0; i < numChunks; i++) {
-				byte[] chunk;
-				if(bytesRemaining >= bufferSize) {
-					chunk = new byte[bufferSize];
-				}else {
-					chunk = new byte[(int) bytesRemaining];
+				int size = bufferSize;
+				if(bytesRemaining < bufferSize) {
+					size = (int) bytesRemaining;
 				}
-
 				LinkedList<ChunkUtil> locations = chunks[i];
-				ChunkUtil dest = locations.pollFirst();
 
-				senders.putIfAbsent(dest, new TCPSender(new Socket(dest.getHostname(), dest.getPort())));
-				TCPSender sender = senders.get(dest);
-				file.readFully(chunk);
+				if(replication) sendChunk(size, file, locations, i);
+				else sendShards(size, file, locations, i);
 
-				ChunkWriteRequest request = new ChunkWriteRequest(locations,this.destination+"_chunk_"+i, chunk, lastModified);
-				sender.sendData(request.getBytes());
-				sender.flush();
-				bytesRemaining-=chunk.length;
+				bytesRemaining-=size;
 			}
 			for(TCPSender sender : senders.values()) {
 				sender.close();

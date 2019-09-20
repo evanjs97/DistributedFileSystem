@@ -13,6 +13,7 @@ public class ChunkWriteRequest implements Event{
 	private final String filename;
 	private final byte[] chunkData;
 	private final Instant lastModified;
+	private final boolean replication;
 
 	public LinkedList<ChunkUtil> getLocations() {
 		return (LinkedList<ChunkUtil>) locations;
@@ -28,6 +29,8 @@ public class ChunkWriteRequest implements Event{
 
 	public Instant getLastModified() { return lastModified; }
 
+	public boolean getReplication() { return this.replication; }
+
 	@Override
 	public Type getType() {
 		return Type.CHUNK_WRITE_REQUEST;
@@ -42,15 +45,28 @@ public class ChunkWriteRequest implements Event{
 
 		messageMarshaller.writeByteArr(chunkData);
 		messageMarshaller.writeInstant(lastModified);
+		messageMarshaller.writeBoolean(replication);
 
 		return messageMarshaller.getMarshalledData();
 	}
 
-	public ChunkWriteRequest(LinkedList<ChunkUtil> locations, String filename, byte[] chunkData, Instant lastModified) {
+	public ChunkWriteRequest(LinkedList<ChunkUtil> locations, String filename,
+							 byte[] chunkData, Instant lastModified, boolean replication) {
 		this.locations = locations;
 		this.filename = filename;
 		this.chunkData = chunkData;
 		this.lastModified = lastModified;
+		this.replication = replication;
+
+	}
+
+	public ChunkWriteRequest(LinkedList<ChunkUtil> locations, String filename,
+							 byte[] chunkData, Instant lastModified) {
+		this.locations = locations;
+		this.filename = filename;
+		this.chunkData = chunkData;
+		this.lastModified = lastModified;
+		this.replication = true;
 
 	}
 
@@ -59,13 +75,14 @@ public class ChunkWriteRequest implements Event{
 		String name = "";
 		this.locations = new LinkedList<>();
 		byte[] chunk = null;
+		boolean replication = true;
 		try {
 			MessageReader messageReader = new MessageReader(din);
 			name = messageReader.readString();
 			messageReader.readChunkUtilList(locations);
 			chunk = messageReader.readByteArr();
 			time = messageReader.readInstant();
-
+			replication = messageReader.readBoolean();
 			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
@@ -73,5 +90,6 @@ public class ChunkWriteRequest implements Event{
 		chunkData = chunk;
 		filename = name;
 		lastModified = time;
+		this.replication = replication;
 	}
 }

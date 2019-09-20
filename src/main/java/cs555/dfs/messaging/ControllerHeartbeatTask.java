@@ -14,17 +14,10 @@ import java.util.concurrent.ConcurrentSkipListSet;
 
 public class ControllerHeartbeatTask implements HeartbeatTask{
 
-	/*private final ConcurrentHashMap<ChunkUtil, List<String>> hostToFiles;
-	private final ConcurrentHashMap<String, ConcurrentSkipListSet<String>> filesToHost;
-//
-	private ConcurrentSkipListSet<ChunkUtil> chunkServers;*/
 	private final ControllerServer server;
 	private final ConcurrentHashMap<String, TCPSender> senders = new ConcurrentHashMap<>();
 
 	public ControllerHeartbeatTask(ControllerServer server) {
-//		this.hostToFiles = hostToFiles;
-//		this.filesToHost = filesToHost;
-//		this.chunkServers = chunkServers;
 		this.server = server;
 	}
 

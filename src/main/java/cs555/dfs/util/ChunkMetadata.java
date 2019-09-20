@@ -3,6 +3,7 @@ package cs555.dfs.util;
 
 import cs555.dfs.messaging.MessageMarshaller;
 import cs555.dfs.messaging.MessageReader;
+import sun.security.provider.SHA;
 
 import java.io.*;
 import java.nio.file.FileSystems;
@@ -10,24 +11,34 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 public class ChunkMetadata {
 
-//	private final String filename;
 	private Instant lastModified;
 	private int version;
 	private final int chunkNum;
+	private List<ShardMetadata> shardMetadata = new ArrayList<>();
 
 	private ChunkMetadata(int chunkNum, Instant lastModified, int version) {
-//		this.filename = filename;
 		this.lastModified = lastModified;
 		this.version = version;
 		this.chunkNum = chunkNum;
 	}
 
-//	public String getFilename() {
-//		return this.filename;
-//	}
+	public ChunkMetadata(int chunkNum) {
+		this.chunkNum = chunkNum;
+	}
+
+	public void addShard(ShardMetadata metadata) {
+		shardMetadata.add(metadata);
+		if(lastModified == null || metadata.getLastModified().isAfter(lastModified)) {
+			lastModified = metadata.getLastModified();
+		}
+		version = Math.max(version, metadata.getVersion());
+	}
 
 	public int getVersion() { return this.version; }
 
@@ -37,17 +48,17 @@ public class ChunkMetadata {
 
 	public int getChunkNum() { return this.chunkNum; }
 
+	public List<ShardMetadata> getShardMetadata() { return this.shardMetadata; }
+
 	public ChunkMetadata(MessageReader messageReader) {
-//		String filename = "";
 		Instant lastModified = null;
 		int version = 0;
 		int chunkNum = 0;
 		try {
-//			filename = messageReader.readString();
 			chunkNum = messageReader.readInt();
 			lastModified = messageReader.readInstant();
 			version = messageReader.readInt();
-
+			messageReader.readShardMetadataList(shardMetadata);
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
@@ -119,7 +130,10 @@ public class ChunkMetadata {
 	}
 
 	public String toString() {
-		return ""+this.chunkNum;
+
+		if(!shardMetadata.isEmpty()) return String.format("Chunk: %d  Shards: %d  version: %d   last modified: %s",
+				this.chunkNum, shardMetadata.size(), version, lastModified);
+		else return String.format("Chunk: %d    version: %d   last modified: %s",this.chunkNum, version, lastModified);
 	}
 
 	public void writeToStream(MessageMarshaller messageMarshaller) throws IOException{
@@ -127,5 +141,6 @@ public class ChunkMetadata {
 		messageMarshaller.writeInt(chunkNum);
 		messageMarshaller.writeInstant(lastModified);
 		messageMarshaller.writeInt(version);
+		messageMarshaller.writeShardMetadataList(shardMetadata);
 	}
 }

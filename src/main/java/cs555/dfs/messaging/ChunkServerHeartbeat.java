@@ -14,11 +14,13 @@ public class ChunkServerHeartbeat implements Event{
 	private final List<FileMetadata> fileInfo;
 	private final int port;
 	private final double freeDiskSpace;
+	private final boolean replication;
 
-	public ChunkServerHeartbeat(List<FileMetadata> fileInfo, int port, double freeDiskSpace) {
+	public ChunkServerHeartbeat(List<FileMetadata> fileInfo, int port, double freeDiskSpace, boolean replication) {
 		this.fileInfo = Collections.unmodifiableList(fileInfo);
 		this.port = port;
 		this.freeDiskSpace = freeDiskSpace;
+		this.replication = replication;
 	}
 
 	public List<FileMetadata> getFileInfo() {
@@ -31,15 +33,19 @@ public class ChunkServerHeartbeat implements Event{
 
 	public double getFreeDiskSpace() { return this.freeDiskSpace; }
 
+	public boolean getReplication() { return this.replication; }
+
 	public ChunkServerHeartbeat(DataInputStream din) {
 		List<FileMetadata> fileInfo = new LinkedList<>();
 		int port = 0;
 		double freeSpace = 0;
+		boolean replication = true;
 		try {
 			MessageReader messageReader = new MessageReader(din);
 			port = messageReader.readInt();
 			freeSpace = messageReader.readDouble();
 			messageReader.readFileMetadataList(fileInfo);
+			replication = messageReader.readBoolean();
 			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
@@ -48,6 +54,7 @@ public class ChunkServerHeartbeat implements Event{
 //		this.type = type;
 		this.freeDiskSpace = freeSpace;
 		this.port = port;
+		this.replication = replication;
 	}
 
 	@Override
@@ -71,6 +78,7 @@ public class ChunkServerHeartbeat implements Event{
 		messageMarshaller.writeInt(port);
 		messageMarshaller.writeDouble(freeDiskSpace);
 		messageMarshaller.writeFileMetadataList(fileInfo);
+		messageMarshaller.writeBoolean(replication);
 		return messageMarshaller.getMarshalledData();
 	}
 

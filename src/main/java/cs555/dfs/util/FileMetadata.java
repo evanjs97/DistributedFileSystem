@@ -17,6 +17,7 @@ public class FileMetadata {
 	private List<ChunkMetadata> chunks = new ArrayList<>();
 	private Instant lastModified = null;
 	private int version = 1;
+	private final boolean replication;
 
 	public String getFilename() {
 		return filename;
@@ -30,13 +31,18 @@ public class FileMetadata {
 		return lastModified;
 	}
 
+	public boolean getReplication() { return this.replication; }
+
 	public int getVersion() {
 		return version;
 	}
 
-	public FileMetadata(String filename) {
+	public FileMetadata(String filename, boolean replication) {
+		this.replication = replication;
 		this.filename = filename;
 	}
+
+
 
 	public void addChunk(ChunkMetadata metadata) {
 		chunks.add(metadata);
@@ -52,6 +58,7 @@ public class FileMetadata {
 			messageMarshaller.writeInstant(lastModified);
 			messageMarshaller.writeInt(version);
 			messageMarshaller.writeChunkMetadataList(chunks);
+			messageMarshaller.writeBoolean(replication);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -60,23 +67,31 @@ public class FileMetadata {
 	public String toString() {
 		String time = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
 				.withZone(ZoneId.systemDefault()).format(lastModified);
-		return String.format("	--%s  chunks:%d version: %d   last modified: %s", filename, chunks.size(), version, time);
+		StringBuilder chunkBuilder = new StringBuilder();
+		for(ChunkMetadata metadata : chunks) {
+			chunkBuilder.append(metadata.toString());
+			chunkBuilder.append("\n");
+		}
+		return String.format("	--%s  version: %d   last modified: %s\n%s", filename, version, time, chunkBuilder.toString());
 	}
 
 	public FileMetadata(MessageReader reader) {
 		String filename = "";
 		Instant time = null;
 		int version = 0;
+		boolean replication = true;
 		try {
 			filename = reader.readString();
 			time = reader.readInstant();
 			version = reader.readInt();
 			reader.readChunkMetadataList(chunks);
+			replication = reader.readBoolean();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		this.filename =filename;
 		this.lastModified = time;
 		this.version = version;
+		this.replication = replication;
 	}
 }

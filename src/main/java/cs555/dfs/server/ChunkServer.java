@@ -22,12 +22,21 @@ public class ChunkServer implements Server{
 	private final String hostname;
 	private final int hostPort;
 	private int port;
-	private final ConcurrentHashMap<String, ConcurrentSkipListSet<Integer>> files = new ConcurrentHashMap<>();
-	private final ConcurrentHashMap<String, ConcurrentSkipListSet<Integer>> newFiles = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> files = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> newFiles = new ConcurrentHashMap<>();
 	private static final int CHECKSUM_SLICE = 8 * 1024;
 	private static final int CHECKSUM = 40;
 
 	private final String BASE_DIR;
+
+	public class IntPair {
+		public final int chunk;
+		public final int shard;
+		IntPair(int chunk, int shard) {
+			this.chunk = chunk;
+			this.shard = shard;
+		}
+	}
 
 	public ChunkServer(String hostname, int port, String dataDir) {
 		this.hostname = hostname;
@@ -104,7 +113,7 @@ public class ChunkServer implements Server{
 				handleChunkReadResponse((ChunkReadResponse) event);
 				break;
 			case CHUNK_LOCATION_RESPONSE:
-				MessagingUtil.handleChunkLocationResponse((ChunkLocationResponse) event, port);
+				MessagingUtil.handleChunkLocationResponse((ChunkLocationResponse) event, port, false);
 				break;
 			case CHUNK_FORWARD_REQUEST:
 				System.out.println("Received Chunk Forwarding Request");
@@ -117,7 +126,7 @@ public class ChunkServer implements Server{
 	}
 
 	private void handleChunkForwardRequest(ChunkForwardRequest request) {
-		FileRead chunkRead = readFile(request.getFilename());
+		FileRead chunkRead = readFile(request.getFilename(), true);
 
 		try {
 			TCPSender sender = new TCPSender(new Socket(request.getDestHost(), request.getDestPort()));
@@ -140,10 +149,10 @@ public class ChunkServer implements Server{
 		if(this.files.containsKey(request.getFilename())) {
 			System.out.println("Writing Duplicate File: " + request.getFilename());
 		}
-		if(!request.getLocations().isEmpty()) {
+		if(!request.getLocations().isEmpty() && request.getReplication()) {
 			forwardChunk(request);
 		}
-		writeFile(request.getChunkData(), request.getFilename());
+		writeFile(request.getChunkData(), request.getFilename(), request.getReplication());
 		ChunkMetadata.setLastModifiedTime(BASE_DIR+request.getFilename(), request.getLastModified());
 	}
 
@@ -153,7 +162,7 @@ public class ChunkServer implements Server{
 	 * @param chunk the chunk to write
 	 * @param filename the filename for that chunk
 	 */
-	private void writeFile(byte[] chunk, String filename) {
+	private void writeFile(byte[] chunk, String filename, boolean replication) {
 		try {
 			String dir = BASE_DIR + filename.substring(0, filename.lastIndexOf("/"));
 			File file = new File(dir);
@@ -162,36 +171,58 @@ public class ChunkServer implements Server{
 			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "rw");
 			raFile.seek(0);
 
-			int numChecksums = chunk.length / (8 * 1024);
-			if(chunk.length % (8 * 1024) > 0) {
-				numChecksums++;
+			if(replication) {
+				int numChecksums = chunk.length / (8 * 1024);
+				if (chunk.length % (8 * 1024) > 0) {
+					numChecksums++;
+				}
+				int remainingBytes = chunk.length;
+				int offset = 0;
+				int length = CHECKSUM_SLICE;
+				for (int i = 0; i < numChecksums; i++) {
+
+					byte[] range = Arrays.copyOfRange(chunk, offset, length);
+					raFile.write(range);
+
+					raFile.write(ChunkUtil.SHAChecksum(range).getBytes());
+
+					remainingBytes -= CHECKSUM_SLICE;
+					offset = length;
+					if (CHECKSUM_SLICE > remainingBytes) length += remainingBytes;
+					else length += CHECKSUM_SLICE;
+				}
+
+				//			raFile.write(chunk);
+				raFile.setLength(chunk.length + (numChecksums * CHECKSUM));
+			}else {
+				raFile.write(chunk);
+				raFile.setLength(chunk.length);
 			}
-			int remainingBytes = chunk.length;
-			int offset = 0;
-			int length = CHECKSUM_SLICE;
-			for(int i = 0; i < numChecksums; i++) {
-
-				byte[] range = Arrays.copyOfRange(chunk, offset, length);
-				raFile.write(range);
-
-				raFile.write(ChunkUtil.SHAChecksum(range).getBytes());
-
-				remainingBytes -= CHECKSUM_SLICE;
-				offset = length;
-				if(CHECKSUM_SLICE > remainingBytes) length += remainingBytes;
-				else length += CHECKSUM_SLICE;
-			}
-
-			raFile.write(chunk);
-			raFile.setLength(chunk.length+(numChecksums*CHECKSUM));
 
 			String actualFile = filename.substring(0, filename.lastIndexOf("_chunk_"));
-			int chunkNum = Integer.parseInt(filename.substring(filename.lastIndexOf('_')+1));
-			newFiles.putIfAbsent(actualFile, new ConcurrentSkipListSet<>());
-			files.putIfAbsent(actualFile, new ConcurrentSkipListSet<>());
+			int chunkNum ;
+			int shardNum = -1;
+			if(!replication) {
+				chunkNum = Integer.parseInt(filename.substring(filename.lastIndexOf("_chunk_")+7,
+						filename.lastIndexOf('_')));
+				shardNum = Integer.parseInt(filename.substring(filename.lastIndexOf('_')+1));
+			}else {
+				chunkNum = Integer.parseInt(filename.substring(filename.lastIndexOf('_')+1));
+			}
+			newFiles.putIfAbsent(actualFile, new ConcurrentHashMap<>());
+			files.putIfAbsent(actualFile, new ConcurrentHashMap<>());
+			newFiles.get(actualFile).putIfAbsent(chunkNum, new ConcurrentSkipListSet<>());
+			files.get(actualFile).putIfAbsent(chunkNum, new ConcurrentSkipListSet<>());
 
-			newFiles.get(actualFile).add(chunkNum);
-			files.get(actualFile).add(chunkNum);
+			if(shardNum != -1) {
+				ConcurrentSkipListSet<Integer> newShards = newFiles.get(actualFile).remove(chunkNum);
+				ConcurrentSkipListSet<Integer> oldShards = files.get(actualFile).remove(chunkNum);
+				newShards.add(shardNum);
+				oldShards.add(shardNum);
+				newFiles.get(actualFile).put(chunkNum, newShards);
+				files.get(actualFile).put(chunkNum, newShards);
+			}
+
 			raFile.close();
 			ChunkMetadata.incrementVersion(BASE_DIR+filename+".metadata");
 		}catch(FileNotFoundException fnfe) {
@@ -213,8 +244,8 @@ public class ChunkServer implements Server{
 	 * @param socket the socket that received the request
 	 */
 	private void handleFileReadRequest(ChunkReadRequest request, Socket socket) {
-		FileRead chunkRead = readFile(request.getFilename());
-
+		FileRead chunkRead = readFile(request.getFilename(), request.getReplication());
+		//System.out.println("Reading File: " + request.getFilename());
 		try {
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
 			sender.sendData(new ChunkReadResponse(chunkRead.bytes, request.getFilename(), !chunkRead.corrupted).getBytes());
@@ -222,7 +253,7 @@ public class ChunkServer implements Server{
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}
-		if(chunkRead.corrupted) {
+		if(chunkRead.corrupted && request.getReplication()) {
 			repairCorruptFile(request.getFilename());
 		}
 	}
@@ -235,7 +266,7 @@ public class ChunkServer implements Server{
 	private void handleChunkReadResponse(ChunkReadResponse response) {
 		if(response.isSuccess()) {
 			System.out.println("Chunk Server: Repairing file corruption: " + response.getFilename());
-			writeFile(response.getChunk(), response.getFilename());
+			writeFile(response.getChunk(), response.getFilename(), true);
 		}else {
 			System.out.println("Chunk Server: Unable to repair corruption");
 		}
@@ -274,7 +305,7 @@ public class ChunkServer implements Server{
 	 * @param filename the filename to read from
 	 * @return a FileRead object that contains chunk and corruption information
 	 */
-	private FileRead readFile(String filename) {
+	private FileRead readFile(String filename, boolean replication) {
 		byte[] bytes = null;
 		boolean corrupted = false;
 		int chunkNum = 0;
@@ -284,21 +315,26 @@ public class ChunkServer implements Server{
 			int length = (int) raFile.length();
 
 			ByteArrayOutputStream baout = new ByteArrayOutputStream();
-
-			for(int i = 0; i < length; i+=CHECKSUM_SLICE+CHECKSUM) {
-				int numBytes = CHECKSUM_SLICE;
-				if(length - (i + CHECKSUM) < CHECKSUM_SLICE) {
-					numBytes = length - (i + CHECKSUM);
+			if(replication) {
+				for (int i = 0; i < length; i += CHECKSUM_SLICE + CHECKSUM) {
+					int numBytes = CHECKSUM_SLICE;
+					if (length - (i + CHECKSUM) < CHECKSUM_SLICE) {
+						numBytes = length - (i + CHECKSUM);
+					}
+					byte[] arr = new byte[numBytes];
+					byte[] checksum = new byte[CHECKSUM];
+					raFile.readFully(arr);
+					raFile.readFully(checksum);
+					if (!ChunkUtil.SHAChecksum(arr).equals(new String(checksum))) {
+						System.out.println("Chunk Server: Detected corrupted file: " + filename + "at chunk: " + chunkNum);
+						corrupted = true;
+					}
+					chunkNum++;
+					baout.write(arr);
 				}
-				byte[] arr = new byte[numBytes];
-				byte[] checksum = new byte[CHECKSUM];
+			}else {
+				byte[] arr = new byte[(int)raFile.length()];
 				raFile.readFully(arr);
-				raFile.readFully(checksum);
-				if(!ChunkUtil.SHAChecksum(arr).equals(new String(checksum))) {
-					System.out.println("Chunk Server: Detected corrupted file: " + filename + "at chunk: " + chunkNum);
-					corrupted = true;
-				}
-				chunkNum++;
 				baout.write(arr);
 			}
 			bytes = baout.toByteArray();

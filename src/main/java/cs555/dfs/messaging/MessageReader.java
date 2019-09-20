@@ -3,6 +3,7 @@ package cs555.dfs.messaging;
 import cs555.dfs.util.ChunkMetadata;
 import cs555.dfs.util.ChunkUtil;
 import cs555.dfs.util.FileMetadata;
+import cs555.dfs.util.ShardMetadata;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -51,6 +52,13 @@ public class MessageReader {
 		int listSize = din.readInt();
 		for(int i = 0; i < listSize; i++) {
 			fileInfo.add(new ChunkMetadata(this));
+		}
+	}
+
+	public void readShardMetadataList(List<ShardMetadata> fileInfo) throws IOException {
+		int listSize = din.readInt();
+		for(int i = 0; i < listSize; i++) {
+			fileInfo.add(new ShardMetadata(this));
 		}
 	}
 

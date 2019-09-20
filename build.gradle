@@ -18,8 +18,16 @@ dependencies {
     extraLibs files('libs/reed-solomon-erasure-coding.jar')
     configurations.compile.extendsFrom(configurations.extraLibs)
 }
+task copyToLib( type: Copy ) {
+    configurations.runtime.asFileTree.each {
+        from ( zipTree(it))
+    }
+    into "build/classes/java/main"
+}
+
 
 jar {
+    dependsOn copyToLib
     from {
         configurations.extraLibs.collect { it.isDirectory() ? it : zipTree(it) }
     }

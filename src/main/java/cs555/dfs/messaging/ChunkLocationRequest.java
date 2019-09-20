@@ -7,6 +7,7 @@ public class ChunkLocationRequest implements Event{
 	private final String filename;
 	private final int port;
 
+
 	@Override
 	public Type getType() {
 		return Type.CHUNK_LOCATION_REQUEST;

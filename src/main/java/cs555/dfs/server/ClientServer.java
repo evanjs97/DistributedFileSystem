@@ -1,5 +1,6 @@
 package cs555.dfs.server;
 
+import cs555.dfs.erasure.SolomonErasure;
 import cs555.dfs.messaging.*;
 import cs555.dfs.transport.TCPFileReader;
 import cs555.dfs.transport.TCPFileSender;
@@ -19,6 +20,8 @@ public class ClientServer implements Server{
 	private TCPFileSender uploader = null;
 	private ConcurrentHashMap<String, Long> filenameToChunks = new ConcurrentHashMap<>();
 	private TCPFileReader reader = null;
+	private final boolean replication;
+	private final int NUM_FILE_DESTINATIONS;
 
 
 	@Override
@@ -28,7 +31,7 @@ public class ClientServer implements Server{
 				handleChunkDestinationResponse((ChunkDestinationResponse) event);
 				break;
 			case CHUNK_LOCATION_RESPONSE:
-				MessagingUtil.handleChunkLocationResponse((ChunkLocationResponse) event, port);
+				MessagingUtil.handleChunkLocationResponse((ChunkLocationResponse) event, port, replication);
 				break;
 			case CHUNK_READ_RESPONSE:
 				handleChunkReadResponse((ChunkReadResponse) event);
@@ -71,9 +74,17 @@ public class ClientServer implements Server{
 				ioe.printStackTrace();
 			}
 		} else if(reader != null){
-			int index = Integer.parseInt(response.getFilename().substring(response.getFilename().lastIndexOf('_') + 1));
-			synchronized (reader) {
-				reader.addFileBytes(response.getChunk(), index);
+			if(replication) {
+				int index = Integer.parseInt(response.getFilename().substring(response.getFilename().lastIndexOf('_') + 1));
+				synchronized (reader) {
+					reader.addFileBytes(response.getChunk(), index);
+				}
+			}else {
+				int shard = Integer.parseInt(response.getFilename().substring(response.getFilename().lastIndexOf('_') + 1));
+				String filename = response.getFilename().substring(0, response.getFilename().lastIndexOf('_'));
+				int index = Integer.parseInt(filename.substring(filename.lastIndexOf('_') + 1));
+//				System.out.println("Read Chunk: " + index + " Shard: " + shard + " SIZE: " + response.getChunk().length);
+				reader.addShardBytes(response.getChunk(), shard, index);
 			}
 		}
 	}
@@ -125,14 +136,15 @@ public class ClientServer implements Server{
 				destination += filename.substring(filename.lastIndexOf('/')+1);
 			}
 
-			TCPFileSender fileSender = new TCPFileSender(filename, destination);
+			TCPFileSender fileSender = new TCPFileSender(filename, destination, replication);
 			this.uploader = fileSender;
 
 			long numChunks = fileSender.getNumChunks();
 
 			for(long i = 0; i < numChunks; i++) {
 				this.filenameToChunks.put(destination, numChunks);
-				sender.sendData(new ChunkDestinationRequest(this.port, destination+"_chunk_"+i).getBytes());
+				sender.sendData(new ChunkDestinationRequest(this.port, destination+"_chunk_"+i,
+						NUM_FILE_DESTINATIONS).getBytes());
 				sender.flush();
 			}
 			socket.close();
@@ -152,9 +164,16 @@ public class ClientServer implements Server{
 		try {
 			Socket socket = new Socket(controllerHostname, controllerPort);
 			TCPSender sender = new TCPSender(socket);
-			reader = new TCPFileReader(filename, chunks, destination);
+			reader = new TCPFileReader(filename, chunks, destination, replication);
+			String name = filename + "_chunk_";
 			for (long i = 0; i < chunks; i++) {
-				MessagingUtil.handleChunkLocationRequest(sender, filename+"_chunk_"+i, port);
+				if(!replication) {
+					for(int j = 0; j < SolomonErasure.TOTAL_SHARDS; j++) {
+						MessagingUtil.handleChunkLocationRequest(sender, name+i+"_"+j, port);
+					}
+				}else {
+					MessagingUtil.handleChunkLocationRequest(sender, name + i, port);
+				}
 			}
 			sender.close();
 		}catch(IOException ioe) {
@@ -163,10 +182,14 @@ public class ClientServer implements Server{
 	}
 
 
-	public ClientServer(String controllerHostname, int controllerPort, int clientPort) {
+	public ClientServer(String controllerHostname, int controllerPort, int clientPort, boolean replication) {
 		this.controllerHostname = controllerHostname;
 		this.controllerPort = controllerPort;
 		this.port = clientPort;
+		this.replication = replication;
+		if(replication) NUM_FILE_DESTINATIONS = 3;
+		else NUM_FILE_DESTINATIONS = SolomonErasure.TOTAL_SHARDS;
+		System.out.println("CREATING CLIENT WITH REPLICATION: " + replication);
 	}
 
 	/**
@@ -180,8 +203,9 @@ public class ClientServer implements Server{
 	}
 
 	public static void main(String[] args) {
+		boolean replication = true;
 		if(args.length < 2) {
-			System.err.println("Error: Must specify at least 2 arguments");
+			System.err.println("Error: Must specify at least 3 arguments");
 			System.exit(1);
 		}
 		try {
@@ -192,13 +216,20 @@ public class ClientServer implements Server{
 				throw new NumberFormatException();
 			}
 			if(args.length > 2) {
-				clientPort = Integer.parseInt(args[2]);
-				if(clientPort < 1024 || clientPort > 65535 || hostPort == clientPort) {
-					throw new NumberFormatException();
+				if(args[2].equals("erasure")) {
+					replication = false;
+				}
+				if(args.length > 3) {
+					clientPort = Integer.parseInt(args[3]);
+					if(clientPort < 1024 || clientPort > 65535 || hostPort == clientPort) {
+						throw new NumberFormatException();
+					}
+
+
 				}
 			}
 
-			ClientServer client = new ClientServer(hostname, hostPort, clientPort);
+			ClientServer client = new ClientServer(hostname, hostPort, clientPort, replication);
 			client.init();
 			client.handleUserInput();
 		}catch(NumberFormatException nfe) {
