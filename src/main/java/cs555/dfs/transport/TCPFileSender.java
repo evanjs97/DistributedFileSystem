@@ -15,16 +15,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class TCPFileSender {
 
-//	private ArrayBlockingQueue<LinkedList<ChunkUtil>> availableLocations = new ArrayBlockingQueue<>(1000);
 	private HashMap<ChunkUtil, TCPSender> senders = new HashMap<>();
 	private final LinkedList<ChunkUtil>[] chunks;
 
-//	private final String destination;
-//	private final String filename;
-//	private RandomAccessFile file;
-//	private final long numChunks;
 	private final AtomicInteger chunkCount;
-//	private final int PRINT_INTERVAL;
 	private final String filename;
 	private final Instant lastModified;
 	private final String destination;
@@ -87,16 +81,22 @@ public class TCPFileSender {
 
 	private void sendShards(int size, RandomAccessFile file, LinkedList<ChunkUtil> locations, int chunkNum) {
 		try {
+//			int remainingSize = size;
+			System.out.println("File Size");
 			byte[][] shards = SolomonErasure.encode(file, size);
 			for(int i = 0; i < SolomonErasure.TOTAL_SHARDS; i++) {
+//				int shardSize = shards[i].length;
+//				if(shardSize > remainingSize) shardSize = remainingSize;
+//				System.out.println("SHARD: " + shardSize);
 				ChunkUtil dest = locations.pollFirst();
 
 				senders.putIfAbsent(dest, new TCPSender(new Socket(dest.getHostname(), dest.getPort())));
 				TCPSender sender = senders.get(dest);
 				ChunkWriteRequest request = new ChunkWriteRequest(new LinkedList<>(),
-						this.destination+"_chunk_"+chunkNum+"_"+i, shards[i],lastModified, replication);
+						this.destination+"_chunk_"+chunkNum+"_"+i, shards[i],lastModified, replication, size);
 				sender.sendData(request.getBytes());
 				sender.flush();
+//				remainingSize-=shardSize;
 			}
 		} catch (IOException e) {
 			e.printStackTrace();

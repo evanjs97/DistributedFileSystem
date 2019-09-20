@@ -84,7 +84,7 @@ public class ClientServer implements Server{
 				String filename = response.getFilename().substring(0, response.getFilename().lastIndexOf('_'));
 				int index = Integer.parseInt(filename.substring(filename.lastIndexOf('_') + 1));
 //				System.out.println("Read Chunk: " + index + " Shard: " + shard + " SIZE: " + response.getChunk().length);
-				reader.addShardBytes(response.getChunk(), shard, index);
+				reader.addShardBytes(response.getChunk(), shard, index, response.getFileSize());
 			}
 		}
 	}

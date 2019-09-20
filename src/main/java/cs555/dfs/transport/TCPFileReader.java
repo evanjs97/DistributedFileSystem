@@ -9,13 +9,13 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class TCPFileReader {
 
 	private final byte[][] chunks;
 	private final byte[][][] shards;
+	private final int[][] shardSize;
 	private final int[] numShards;
 	private final boolean[][] shardsExist;
 
@@ -39,11 +39,13 @@ public class TCPFileReader {
 			shards = null;
 			numShards = null;
 			shardsExist = null;
+			shardSize = null;
 		}
 		else {
 			shards = new byte[(int)numChunks][SolomonErasure.TOTAL_SHARDS][];
 			shardsExist = new boolean[(int)numChunks][SolomonErasure.TOTAL_SHARDS];
 			numShards = new int[(int)numChunks];
+			shardSize = new int[(int)numChunks][SolomonErasure.TOTAL_SHARDS];
 		}
 
 	}
@@ -74,15 +76,16 @@ public class TCPFileReader {
 		}
 	}
 
-	public synchronized void addShardBytes(byte[] bytes, int shard, int chunkIndex) {
+	public synchronized void addShardBytes(byte[] bytes, int shard, int chunkIndex, int fileSize) {
 		if(numShards[chunkIndex] == -1) {
 			return;
 		}
 		shards[chunkIndex][shard] = bytes;
 		shardsExist[chunkIndex][shard] = true;
 		numShards[chunkIndex]++;
+		shardSize[chunkIndex][shard] = fileSize;
 		if(numShards[chunkIndex] > SolomonErasure.DATA_SHARDS) {
-			byte[] decoded = SolomonErasure.decode(shards[chunkIndex], shardsExist[chunkIndex], numShards[chunkIndex]);
+			byte[] decoded = SolomonErasure.decode(shards[chunkIndex], shardsExist[chunkIndex], numShards[chunkIndex], shardSize[chunkIndex]);
 			numShards[chunkIndex] = -1;
 			addFileBytes(decoded, chunkIndex);
 		}

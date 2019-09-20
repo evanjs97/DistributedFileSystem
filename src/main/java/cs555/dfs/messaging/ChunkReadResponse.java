@@ -7,6 +7,7 @@ public class ChunkReadResponse implements Event{
 	private final byte[] chunk;
 	private final String filename;
 	private final boolean success;
+	private final int fileSize;
 
 	@Override
 	public final Type getType() {
@@ -23,6 +24,8 @@ public class ChunkReadResponse implements Event{
 
 	public final boolean isSuccess() { return success; }
 
+	public final int getFileSize() { return this.fileSize; }
+
 	@Override
 	public byte[] getBytes() throws IOException {
 		MessageMarshaller messageMarshaller = new MessageMarshaller();
@@ -32,20 +35,22 @@ public class ChunkReadResponse implements Event{
 			messageMarshaller.writeByteArr(chunk);
 		}
 		messageMarshaller.writeString(filename);
+		messageMarshaller.writeInt(fileSize);
 		return messageMarshaller.getMarshalledData();
 	}
 
-	public ChunkReadResponse(byte[] bytes, String filename, boolean success) {
+	public ChunkReadResponse(byte[] bytes, String filename, boolean success, int fileSize) {
 		this.chunk = bytes;
 		this.filename = filename;
 		this.success = success;
+		this.fileSize = fileSize;
 	}
 
 	public ChunkReadResponse(DataInputStream din) {
 		byte[] chunk = null;
 		String filename = "";
 		boolean success = true;
-
+		int fileSize = 0;
 		try{
 			MessageReader messageReader = new MessageReader(din);
 			success = messageReader.readBoolean();
@@ -53,6 +58,7 @@ public class ChunkReadResponse implements Event{
 				chunk = messageReader.readByteArr();
 			}
 			filename = messageReader.readString();
+			fileSize = messageReader.readInt();
 			messageReader.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
@@ -60,5 +66,6 @@ public class ChunkReadResponse implements Event{
 		this.chunk = chunk;
 		this.filename = filename;
 		this.success = success;
+		this.fileSize = fileSize;
 	}
 }

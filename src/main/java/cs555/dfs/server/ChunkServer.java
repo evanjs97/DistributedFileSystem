@@ -22,6 +22,7 @@ public class ChunkServer implements Server{
 	private final String hostname;
 	private final int hostPort;
 	private int port;
+	private final ConcurrentHashMap<String, Integer> fileToSize = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> files = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> newFiles = new ConcurrentHashMap<>();
 	private static final int CHECKSUM_SLICE = 8 * 1024;
@@ -146,13 +147,11 @@ public class ChunkServer implements Server{
 	 * @param request the chunk write request
 	 */
 	private void writeChunk(ChunkWriteRequest request) {
-		if(this.files.containsKey(request.getFilename())) {
-			System.out.println("Writing Duplicate File: " + request.getFilename());
-		}
+
 		if(!request.getLocations().isEmpty() && request.getReplication()) {
 			forwardChunk(request);
 		}
-		writeFile(request.getChunkData(), request.getFilename(), request.getReplication());
+		writeFile(request.getChunkData(), request.getFilename(), request.getReplication(), request.getActualSize());
 		ChunkMetadata.setLastModifiedTime(BASE_DIR+request.getFilename(), request.getLastModified());
 	}
 
@@ -162,7 +161,7 @@ public class ChunkServer implements Server{
 	 * @param chunk the chunk to write
 	 * @param filename the filename for that chunk
 	 */
-	private void writeFile(byte[] chunk, String filename, boolean replication) {
+	private void writeFile(byte[] chunk, String filename, boolean replication, int actualSize) {
 		try {
 			String dir = BASE_DIR + filename.substring(0, filename.lastIndexOf("/"));
 			File file = new File(dir);
@@ -191,14 +190,13 @@ public class ChunkServer implements Server{
 					if (CHECKSUM_SLICE > remainingBytes) length += remainingBytes;
 					else length += CHECKSUM_SLICE;
 				}
-
 				//			raFile.write(chunk);
 				raFile.setLength(chunk.length + (numChecksums * CHECKSUM));
 			}else {
 				raFile.write(chunk);
 				raFile.setLength(chunk.length);
 			}
-
+			fileToSize.put(filename, actualSize);
 			String actualFile = filename.substring(0, filename.lastIndexOf("_chunk_"));
 			int chunkNum ;
 			int shardNum = -1;
@@ -213,6 +211,7 @@ public class ChunkServer implements Server{
 			files.putIfAbsent(actualFile, new ConcurrentHashMap<>());
 			newFiles.get(actualFile).putIfAbsent(chunkNum, new ConcurrentSkipListSet<>());
 			files.get(actualFile).putIfAbsent(chunkNum, new ConcurrentSkipListSet<>());
+
 
 			if(shardNum != -1) {
 				ConcurrentSkipListSet<Integer> newShards = newFiles.get(actualFile).remove(chunkNum);
@@ -248,7 +247,7 @@ public class ChunkServer implements Server{
 		//System.out.println("Reading File: " + request.getFilename());
 		try {
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
-			sender.sendData(new ChunkReadResponse(chunkRead.bytes, request.getFilename(), !chunkRead.corrupted).getBytes());
+			sender.sendData(new ChunkReadResponse(chunkRead.bytes, request.getFilename(), !chunkRead.corrupted, fileToSize.get(request.getFilename())).getBytes());
 			sender.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
@@ -266,7 +265,7 @@ public class ChunkServer implements Server{
 	private void handleChunkReadResponse(ChunkReadResponse response) {
 		if(response.isSuccess()) {
 			System.out.println("Chunk Server: Repairing file corruption: " + response.getFilename());
-			writeFile(response.getChunk(), response.getFilename(), true);
+			writeFile(response.getChunk(), response.getFilename(), true, response.getChunk().length);
 		}else {
 			System.out.println("Chunk Server: Unable to repair corruption");
 		}
