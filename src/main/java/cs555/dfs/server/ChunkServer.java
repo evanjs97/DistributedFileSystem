@@ -22,6 +22,7 @@ public class ChunkServer implements Server{
 	private final String hostname;
 	private final int hostPort;
 	private int port;
+	private final ConcurrentHashMap<String, List<Integer>> corruptFiles = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, Integer> fileToSize = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> files = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> newFiles = new ConcurrentHashMap<>();
@@ -30,28 +31,11 @@ public class ChunkServer implements Server{
 
 	private final String BASE_DIR;
 
-	public class IntPair {
-		public final int chunk;
-		public final int shard;
-		IntPair(int chunk, int shard) {
-			this.chunk = chunk;
-			this.shard = shard;
-		}
-	}
-
 	public ChunkServer(String hostname, int port, String dataDir) {
 		this.hostname = hostname;
 		this.hostPort = port;
 		this.BASE_DIR = dataDir;
 	}
-//
-//	public Set<String> getRecentFiles() {
-//		return this.newFiles;
-//	}
-//
-//	public Set<String> getAllFiles() {
-//		return files;
-//	}
 
 	public final int getPort() {
 		return port;
@@ -111,10 +95,12 @@ public class ChunkServer implements Server{
 				handleFileReadRequest(request, socket);
 				break;
 			case CHUNK_READ_RESPONSE:
+				System.out.println("RECIEVED READ RESPONSE: " + socket.getInetAddress().getCanonicalHostName());
 				handleChunkReadResponse((ChunkReadResponse) event);
 				break;
 			case CHUNK_LOCATION_RESPONSE:
-				MessagingUtil.handleChunkLocationResponse((ChunkLocationResponse) event, port, false);
+				handleLocationResponse((ChunkLocationResponse) event);
+//				MessagingUtil.handleChunkLocationResponse((ChunkLocationResponse) event, port, false);
 				break;
 			case CHUNK_FORWARD_REQUEST:
 				System.out.println("Received Chunk Forwarding Request");
@@ -123,6 +109,21 @@ public class ChunkServer implements Server{
 			default:
 				System.err.println("ChunkServer: No supported event of given type");
 				break;
+		}
+	}
+
+	private void handleLocationResponse(ChunkLocationResponse response) {
+		List<Integer> corruptChunks = corruptFiles.getOrDefault(response.getFilename(), null);
+		if (corruptChunks == null) {
+			System.out.println("Failed to repair file, cannot locate corrupt slices");
+			return;
+		}
+		try {
+			TCPSender sender = new TCPSender(new Socket(response.getHostname(), response.getPort()));
+			sender.sendData(new ChunkReadRequest(response.getFilename(), port, corruptChunks).getBytes());
+			sender.close();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
 		}
 	}
 
@@ -190,7 +191,6 @@ public class ChunkServer implements Server{
 					if (CHECKSUM_SLICE > remainingBytes) length += remainingBytes;
 					else length += CHECKSUM_SLICE;
 				}
-				//			raFile.write(chunk);
 				raFile.setLength(chunk.length + (numChecksums * CHECKSUM));
 			}else {
 				raFile.write(chunk);
@@ -235,6 +235,30 @@ public class ChunkServer implements Server{
 		}
 	}
 
+	private void writeFile(byte[] chunk, String filename, int fileSize) {
+		List<Integer> corruptions = corruptFiles.get(filename);
+		try {
+			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "rw");
+
+			int remaining = chunk.length;
+			int startPosition = 0;
+			for(int rep : corruptions) {
+				raFile.seek(rep*(CHECKSUM_SLICE+CHECKSUM));
+				int size = CHECKSUM_SLICE+CHECKSUM;
+				if(size > remaining) size = remaining;
+
+				byte[] copy = Arrays.copyOfRange(chunk, startPosition, startPosition+size);
+				raFile.write(copy);
+
+				remaining-=size;
+				startPosition+=size;
+			}
+			raFile.setLength(fileSize);
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+	}
+
 	/**
 	 * handles incoming file read request from client
 	 * retrieves file from disk and sends to client
@@ -243,17 +267,31 @@ public class ChunkServer implements Server{
 	 * @param socket the socket that received the request
 	 */
 	private void handleFileReadRequest(ChunkReadRequest request, Socket socket) {
-		FileRead chunkRead = readFile(request.getFilename(), request.getReplication());
-		//System.out.println("Reading File: " + request.getFilename());
-		try {
-			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
-			sender.sendData(new ChunkReadResponse(chunkRead.bytes, request.getFilename(), !chunkRead.corrupted, fileToSize.get(request.getFilename())).getBytes());
-			sender.close();
-		}catch(IOException ioe) {
-			ioe.printStackTrace();
+		FileRead chunkRead;
+		if(request.getCorruptions().isEmpty()) {
+			chunkRead = readFile(request.getFilename(), request.getReplication());
+			try {
+				TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
+				sender.sendData(new ChunkReadResponse(chunkRead.bytes, request.getFilename(), chunkRead.corrupted.isEmpty(), fileToSize.get(request.getFilename())).getBytes());
+				sender.close();
+			}catch(IOException ioe) {
+				ioe.printStackTrace();
+			}
 		}
-		if(chunkRead.corrupted && request.getReplication()) {
-			repairCorruptFile(request.getFilename());
+		else {
+			chunkRead = readFile(request.getFilename(), request.getCorruptions());
+			try {
+				TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
+				sender.sendData(new ChunkReadResponse(chunkRead.bytes, request.getFilename(), chunkRead.corrupted.isEmpty(), chunkRead.length).getBytes());
+				sender.close();
+			}catch(IOException ioe) {
+				ioe.printStackTrace();
+			}
+		}
+
+		if(!chunkRead.corrupted.isEmpty() && request.getReplication()) {
+			System.out.println("Repairing Corrupt File");
+			repairCorruptFile(request.getFilename(), chunkRead.corrupted);
 		}
 	}
 
@@ -265,7 +303,7 @@ public class ChunkServer implements Server{
 	private void handleChunkReadResponse(ChunkReadResponse response) {
 		if(response.isSuccess()) {
 			System.out.println("Chunk Server: Repairing file corruption: " + response.getFilename());
-			writeFile(response.getChunk(), response.getFilename(), true, response.getChunk().length);
+			writeFile(response.getChunk(), response.getFilename(), response.getFileSize());
 		}else {
 			System.out.println("Chunk Server: Unable to repair corruption");
 		}
@@ -275,8 +313,9 @@ public class ChunkServer implements Server{
 	 * repairCorruptFile initializes chunk repair request
 	 * @param filename the filename associated with the corrupt file
 	 */
-	private void repairCorruptFile(String filename) {
+	private void repairCorruptFile(String filename, List<Integer> corruptChunks) {
 		try {
+			corruptFiles.put(filename, corruptChunks);
 			TCPSender sender = new TCPSender(new Socket(hostname, hostPort));
 			MessagingUtil.handleChunkLocationRequest(sender, filename, port);
 			sender.close();
@@ -290,12 +329,43 @@ public class ChunkServer implements Server{
 	 */
 	class FileRead {
 		final byte[] bytes;
-		final boolean corrupted;
+		final List<Integer> corrupted;
+		final int length;
 
-		FileRead(byte[] bytes, boolean corrupted) {
+		FileRead(byte[] bytes, List<Integer> corrupted, int length) {
 			this.bytes = bytes;
 			this.corrupted = corrupted;
+			this.length = length;
 		}
+	}
+
+	private FileRead readFile(String filename, List<Integer> repairs) {
+		try {
+			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "r");
+			ByteArrayOutputStream baout = new ByteArrayOutputStream();
+			int length = (int)  raFile.length();
+			for (int rep : repairs) {
+				int position = rep*(CHECKSUM_SLICE+CHECKSUM);
+				raFile.seek(position);
+
+				int size = CHECKSUM_SLICE+CHECKSUM;
+				int pointer = (int) raFile.getFilePointer();
+				if(pointer + size > length) {
+					size = length - pointer;
+				}
+				byte[] bytes = new byte[size];
+				raFile.readFully(bytes);
+				baout.write(bytes);
+			}
+			byte[] out = baout.toByteArray();
+			System.out.println("Chunk Server: Retrieved chunks for file repair");
+			return new FileRead(out, new LinkedList<>(), out.length);
+		}catch(FileNotFoundException fnfe) {
+			fnfe.printStackTrace();
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+		return new FileRead(new byte[0], new LinkedList<>(), 0);
 	}
 
 
@@ -306,27 +376,36 @@ public class ChunkServer implements Server{
 	 */
 	private FileRead readFile(String filename, boolean replication) {
 		byte[] bytes = null;
-		boolean corrupted = false;
+		List<Integer> corruptChunks = new ArrayList<>();
 		int chunkNum = 0;
+		int length = 0;
 		try {
 			RandomAccessFile raFile = new RandomAccessFile(BASE_DIR + filename, "r");
 			raFile.seek(0);
-			int length = (int) raFile.length();
+			length = (int) raFile.length();
 
 			ByteArrayOutputStream baout = new ByteArrayOutputStream();
 			if(replication) {
-				for (int i = 0; i < length; i += CHECKSUM_SLICE + CHECKSUM) {
+				for (int i = 0; i < length; i += (CHECKSUM_SLICE + CHECKSUM)) {
 					int numBytes = CHECKSUM_SLICE;
 					if (length - (i + CHECKSUM) < CHECKSUM_SLICE) {
 						numBytes = length - (i + CHECKSUM);
+					}
+					if(numBytes < 0) {
+						System.out.println("Chunk Server: Detected corrupted file: " + filename + " at slice: " + chunkNum);
+						corruptChunks.add(chunkNum);
+						break;
 					}
 					byte[] arr = new byte[numBytes];
 					byte[] checksum = new byte[CHECKSUM];
 					raFile.readFully(arr);
 					raFile.readFully(checksum);
-					if (!ChunkUtil.SHAChecksum(arr).equals(new String(checksum))) {
-						System.out.println("Chunk Server: Detected corrupted file: " + filename + "at chunk: " + chunkNum);
-						corrupted = true;
+					String check1 = ChunkUtil.SHAChecksum(arr);
+					String check2 = new String(checksum);
+					if (!check1.equals(check2)) {
+						System.out.println("Chunk Server: Detected corrupted file: " + filename + " at slice: " + chunkNum);
+						corruptChunks.add(chunkNum);
+
 					}
 					chunkNum++;
 					baout.write(arr);
@@ -347,7 +426,7 @@ public class ChunkServer implements Server{
 		}catch(DigestException de) {
 			de.printStackTrace();
 		}
-		return new FileRead(bytes, corrupted);
+		return new FileRead(bytes, corruptChunks, length);
 	}
 
 	/**

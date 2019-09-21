@@ -80,6 +80,13 @@ public class MessageMarshaller {
 		}
 	}
 
+	public void writeIntList(List<Integer> list) throws IOException {
+		writeInt(list.size());
+		for(Integer i : list) {
+			writeInt(i);
+		}
+	}
+
 	public void marshallIntStringInt(int value1, String str, int value2) throws IOException {
 		writeInt(value1);
 		writeString(str);

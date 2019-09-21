@@ -76,6 +76,13 @@ public class MessageReader {
 		}
 	}
 
+	public void readIntUtilList(List<Integer> ints) throws IOException {
+		int listSize = din.readInt();
+		for(int i = 0; i < listSize; i++) {
+			ints.add(readInt());
+		}
+	}
+
 	public void close() throws IOException {
 		din.close();
 	}

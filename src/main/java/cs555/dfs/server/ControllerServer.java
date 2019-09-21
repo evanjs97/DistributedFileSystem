@@ -15,29 +15,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class ControllerServer implements Server{
 
-//	public class SetIndexPair {
-//		final ConcurrentSkipListSet<ChunkUtil> map;
-//		final ArrayList<ChunkUtil> index;
-//
-//		public ArrayList<ChunkUtil> getIndex() {
-//			 return index;
-//		}
-//
-//		public ConcurrentSkipListSet<ChunkUtil> getMap() {
-//			 return map;
-//		}
-//
-//		SetIndexPair(ConcurrentSkipListSet<ChunkUtil> map, ArrayList<ChunkUtil> index) {
-//			this.map = map;
-//			this.index = index;
-//		}
-//	}
 	private final ConcurrentHashMap<String, ConcurrentSkipListSet<String>> fileToServers = new ConcurrentHashMap<>();
-//	private final ConcurrentHashMap<String, SetIndexPair> fileToServers = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ChunkUtil> hostToServerObject = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, List<String>> hostToFiles = new ConcurrentHashMap<>();
 	private ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
-//	private final int replicationLevel = 3;
 	private final int port;
 
 	public ConcurrentHashMap<String, ConcurrentSkipListSet<String>> getFileToServers() {
@@ -56,22 +37,10 @@ public class ControllerServer implements Server{
 		return chunkServers;
 	}
 
-//	public void addRemoveIncrement(String host) {
-//		ChunkUtil util = this.hostToServerObject.remove(host);
-//		chunkServers.remove(hostToServerObject.get(util));
-//		util.incrementAssignedChunks();
-//		this.hostToServerObject.put(host, util);
-//		this.chunkServers.add(util);
-//	}
-
 	public boolean removeChunkUtil(String name) {
 		return chunkServers.remove(hostToServerObject.get(name));
 	}
-//
-//	public void addChunkUtil(String host, ChunkUtil util) {
-//		this.hostToServerObject.put(host, util);
-//		this.chunkServers.add(util);
-//	}
+
 
 	public ControllerServer(int port) {
 		this.port = port;
@@ -164,11 +133,6 @@ public class ControllerServer implements Server{
 				if(chunkMetadata.getShardMetadata().isEmpty()) {
 					addFile(fullFile, chunkUtil);
 				}
-//				fileToServers.putIfAbsent(fullFile, new SetIndexPair(new ConcurrentSkipListSet<>(), new ArrayList<>()));
-//				boolean added = fileToServers.get(fullFile).map.add(chunkUtil);
-//				if(added) {
-//					fileToServers.get(fullFile).index.add(chunkUtil);
-//				}
 
 			}
 
@@ -200,8 +164,11 @@ public class ControllerServer implements Server{
 		}
 		int random = ThreadLocalRandom.current().nextInt(0, fileServers.size());
 		ChunkUtil util = fileServers.get(random);
-
-		if(util.getHostname().equals(socket.getInetAddress().getCanonicalHostName()) && util.getPort() == socket.getLocalPort()) {
+		if(!socket.getInetAddress().getCanonicalHostName().equals("little-rock.cs.colostate.edu")) {
+			System.out.println("UTILNAME: " + util.getHostname() + ":" + util.getPort() + " SOCKENAME: " + socket.getInetAddress().getCanonicalHostName() + ":" + request.getPort());
+		}
+		if(util.getHostname().equals(socket.getInetAddress().getHostName()) && util.getPort() == request.getPort()) {
+			System.out.println("TestING");
 			if(fileServers.size() <= 1) util = null;
 			else if(random == 0) util = fileServers.get(random+1);
 			else util = fileServers.get(random-1);

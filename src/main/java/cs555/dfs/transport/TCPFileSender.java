@@ -81,13 +81,8 @@ public class TCPFileSender {
 
 	private void sendShards(int size, RandomAccessFile file, LinkedList<ChunkUtil> locations, int chunkNum) {
 		try {
-//			int remainingSize = size;
-			System.out.println("File Size");
 			byte[][] shards = SolomonErasure.encode(file, size);
 			for(int i = 0; i < SolomonErasure.TOTAL_SHARDS; i++) {
-//				int shardSize = shards[i].length;
-//				if(shardSize > remainingSize) shardSize = remainingSize;
-//				System.out.println("SHARD: " + shardSize);
 				ChunkUtil dest = locations.pollFirst();
 
 				senders.putIfAbsent(dest, new TCPSender(new Socket(dest.getHostname(), dest.getPort())));
@@ -96,7 +91,6 @@ public class TCPFileSender {
 						this.destination+"_chunk_"+chunkNum+"_"+i, shards[i],lastModified, replication, size);
 				sender.sendData(request.getBytes());
 				sender.flush();
-//				remainingSize-=shardSize;
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
