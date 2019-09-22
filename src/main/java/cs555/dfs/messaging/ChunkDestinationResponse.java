@@ -17,7 +17,7 @@ public class ChunkDestinationResponse implements Event{
 	public byte[] getBytes() throws IOException {
 		MessageMarshaller messageMarshaller = new MessageMarshaller();
 		messageMarshaller.writeInt(getType().getValue());
-		messageMarshaller.writeChunkUtilList(locations);
+		messageMarshaller.writeChunkUtilList(locations, false);
 		messageMarshaller.writeString(filename);
 		return messageMarshaller.getMarshalledData();
 	}
@@ -32,7 +32,7 @@ public class ChunkDestinationResponse implements Event{
 		String filename = "";
 		try {
 			MessageReader messageReader = new MessageReader(din);
-			messageReader.readChunkUtilList(locations);
+			messageReader.readChunkUtilList(locations, false);
 			filename = messageReader.readString();
 			messageReader.close();
 		}catch(IOException ioe) {

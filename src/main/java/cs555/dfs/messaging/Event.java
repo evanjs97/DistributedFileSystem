@@ -7,9 +7,9 @@ import java.util.Map;
 
 public interface Event {
 
-	public Type getType();
+	Type getType();
 
-	public byte[] getBytes() throws IOException;
+	byte[] getBytes() throws IOException;
 
 	enum Type {
 		CHUNK_WRITE_REQUEST(0),
@@ -21,7 +21,9 @@ public interface Event {
 		CHUNK_LOCATION_RESPONSE(6),
 		REGISTER_REQUEST(7),
 		CHUNK_SERVER_HEARTBEAT(8),
-		CHUNK_FORWARD_REQUEST(9);
+		CHUNK_FORWARD_REQUEST(9),
+		FILE_LIST_REQUEST(10),
+		FILE_LIST_RESPONSE(11);
 
 
 		private int value;

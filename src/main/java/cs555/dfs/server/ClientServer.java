@@ -6,9 +6,13 @@ import cs555.dfs.transport.TCPFileReader;
 import cs555.dfs.transport.TCPFileSender;
 import cs555.dfs.transport.TCPSender;
 import cs555.dfs.transport.TCPServer;
+import cs555.dfs.util.ChunkUtil;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,8 +24,10 @@ public class ClientServer implements Server{
 	private TCPFileSender uploader = null;
 	private ConcurrentHashMap<String, Long> filenameToChunks = new ConcurrentHashMap<>();
 	private TCPFileReader reader = null;
-	private final boolean replication;
-	private final int NUM_FILE_DESTINATIONS;
+	private boolean replication;
+	private int NUM_FILE_DESTINATIONS;
+	private static final int BATCH_SIZE = 1000;
+	private HashMap<String, TCPSender> senders = new HashMap<>();
 
 
 	@Override
@@ -31,7 +37,7 @@ public class ClientServer implements Server{
 				handleChunkDestinationResponse((ChunkDestinationResponse) event);
 				break;
 			case CHUNK_LOCATION_RESPONSE:
-				MessagingUtil.handleChunkLocationResponse((ChunkLocationResponse) event, port, replication);
+				handleChunkLocationResponse((ChunkLocationResponse) event);
 				break;
 			case CHUNK_READ_RESPONSE:
 				handleChunkReadResponse((ChunkReadResponse) event);
@@ -40,6 +46,48 @@ public class ClientServer implements Server{
 				System.err.println("Client: No event found for request");
 				return;
 		}
+	}
+
+	private void handleChunkLocationResponse(ChunkLocationResponse response) {
+		List<ChunkUtil> locations = response.getLocations();
+		int serverIndex = 0;
+		String base = response.getFilename();
+
+		for(int i = response.getStartChunk(); i < response.getEndChunk(); i++) {
+			try {
+				ChunkUtil server;
+				if(response.getNumShards() != 0) {
+
+					for(int j = 0; j < response.getNumShards(); j++) {
+						server = locations.get(serverIndex);
+						if(server.getPort() == 0 || server.getHostname().equals("")) {
+							serverIndex++;
+							continue;
+						}
+						senders.putIfAbsent(server.toString(), new TCPSender(new Socket(server.getHostname(), server.getPort())));
+						serverIndex++;
+						TCPSender sender = senders.get(server.toString());
+						sender.sendData(new ChunkReadRequest(base+i+"_"+j, port, replication).getBytes());
+						sender.flush();
+					}
+				}else {
+					server = locations.get(serverIndex);
+					if(server.getPort() == 0 || server.getHostname().equals("")) {
+						serverIndex++;
+						continue;
+					}
+					senders.putIfAbsent(server.toString(), new TCPSender(new Socket(server.getHostname(), server.getPort())));
+					TCPSender sender = senders.get(server.toString());
+					sender.sendData(new ChunkReadRequest(base+i, port, replication).getBytes());
+					sender.flush();
+					serverIndex++;
+				}
+
+			}catch(IOException ioe) {
+				ioe.printStackTrace();
+			}
+		}
+
 	}
 
 	/**
@@ -63,12 +111,18 @@ public class ClientServer implements Server{
 	 * @param response the response received from the chunk server
 	 */
 	private void handleChunkReadResponse(ChunkReadResponse response) {
+
 		if(!response.isSuccess()) {
 			System.out.println("Chunk Server detected corruption for file: " + response.getFilename() + " trying to read again.");
 			try {
+				int index = response.getFilename().lastIndexOf("_chunk_");
+				int chunk = Integer.parseInt(response.getFilename().substring(index+7));
+//				System.out.println("Chunk to repair" + chunk);
+				String fileRepair = response.getFilename().substring(0, index+7);
+//				System.out.println("File to repair" + fileRepair);
 				Socket socket = new Socket(controllerHostname, controllerPort);
 				TCPSender sender = new TCPSender(socket);
-				MessagingUtil.handleChunkLocationRequest(sender, response.getFilename(), port);
+				MessagingUtil.handleChunkLocationRequest(sender, fileRepair, port, chunk, chunk+1);
 				socket.close();
 			}catch(IOException ioe) {
 				ioe.printStackTrace();
@@ -83,7 +137,6 @@ public class ClientServer implements Server{
 				int shard = Integer.parseInt(response.getFilename().substring(response.getFilename().lastIndexOf('_') + 1));
 				String filename = response.getFilename().substring(0, response.getFilename().lastIndexOf('_'));
 				int index = Integer.parseInt(filename.substring(filename.lastIndexOf('_') + 1));
-//				System.out.println("Read Chunk: " + index + " Shard: " + shard + " SIZE: " + response.getChunk().length);
 				reader.addShardBytes(response.getChunk(), shard, index, response.getFileSize());
 			}
 		}
@@ -111,6 +164,17 @@ public class ClientServer implements Server{
 						}
 						else {
 							requestChunkLocations(input[1], input[2]);
+						}
+						break;
+					case "set":
+						switch(input[1]) {
+							case "mode":
+								replication = !input[2].equals("erasure");
+								NUM_FILE_DESTINATIONS = (input[2].equals("erasure") ? SolomonErasure.TOTAL_SHARDS : 3);
+								System.out.println("Mode changed to: " + input[2]);
+								break;
+							default:
+								break;
 						}
 						break;
 					default:
@@ -160,19 +224,23 @@ public class ClientServer implements Server{
 	 * @param destination the destination for the file on the client
 	 */
 	private void requestChunkLocations(String filename, String destination) {
-		Long chunks = this.filenameToChunks.get(filename);
+		if(this.filenameToChunks.get(filename) == null) {
+			System.out.println("File not found");
+			return;
+		}
+		int chunks = this.filenameToChunks.get(filename).intValue();
 		try {
 			Socket socket = new Socket(controllerHostname, controllerPort);
 			TCPSender sender = new TCPSender(socket);
 			reader = new TCPFileReader(filename, chunks, destination, replication);
 			String name = filename + "_chunk_";
-			for (long i = 0; i < chunks; i++) {
+			for (int i = 0; i < chunks; i+=BATCH_SIZE) {
+				int start = i;
+				int end = Math.min(i+BATCH_SIZE, chunks);
 				if(!replication) {
-					for(int j = 0; j < SolomonErasure.TOTAL_SHARDS; j++) {
-						MessagingUtil.handleChunkLocationRequest(sender, name+i+"_"+j, port);
-					}
+					MessagingUtil.handleChunkLocationRequest(sender, name, port, start, end, SolomonErasure.TOTAL_SHARDS);
 				}else {
-					MessagingUtil.handleChunkLocationRequest(sender, name + i, port);
+					MessagingUtil.handleChunkLocationRequest(sender, name, port, start, end);
 				}
 			}
 			sender.close();
@@ -189,7 +257,7 @@ public class ClientServer implements Server{
 		this.replication = replication;
 		if(replication) NUM_FILE_DESTINATIONS = 3;
 		else NUM_FILE_DESTINATIONS = SolomonErasure.TOTAL_SHARDS;
-		System.out.println("CREATING CLIENT WITH REPLICATION: " + replication);
+		System.out.println("Creating client with default mode : " + (replication ? "replication" : "erasure"));
 	}
 
 	/**

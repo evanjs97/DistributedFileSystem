@@ -69,10 +69,11 @@ public class MessageReader {
 		}
 	}
 
-	public void readChunkUtilList(List<ChunkUtil> chunkUtil) throws IOException {
+	public void readChunkUtilList(List<ChunkUtil> chunkUtil, boolean addressOnly) throws IOException {
 		int listSize = din.readInt();
 		for(int i = 0; i < listSize; i++) {
-			chunkUtil.add(ChunkUtil.readChunkFromStream(this));
+			if(!addressOnly) chunkUtil.add(ChunkUtil.readChunkFromStream(this));
+			else chunkUtil.add(ChunkUtil.readAddressFromStream(this));
 		}
 	}
 
@@ -80,6 +81,13 @@ public class MessageReader {
 		int listSize = din.readInt();
 		for(int i = 0; i < listSize; i++) {
 			ints.add(readInt());
+		}
+	}
+
+	public void readStringList(List<String> ints) throws IOException {
+		int listSize = din.readInt();
+		for(int i = 0; i < listSize; i++) {
+			ints.add(readString());
 		}
 	}
 

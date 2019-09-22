@@ -22,6 +22,10 @@ public class ChunkUtil implements Comparable<ChunkUtil> {
 		this.port = port;
 		this.freeSpace = freeSpace;
 	}
+	public ChunkUtil(String hostname, int port) {
+		this.hostname = hostname;
+		this.port = port;
+	}
 
 	public synchronized final int incrementAssignedChunks() {
 		return this.assignedChunks.incrementAndGet();
@@ -49,9 +53,19 @@ public class ChunkUtil implements Comparable<ChunkUtil> {
 	}
 
 	public void writeChunkToStream(MessageMarshaller messageMarshaller) throws IOException {
+		writeAddressToStream(messageMarshaller);
+		messageMarshaller.writeDouble(freeSpace);
+	}
+
+	public void writeAddressToStream(MessageMarshaller messageMarshaller) throws IOException {
 		messageMarshaller.writeString(hostname);
 		messageMarshaller.writeInt(port);
-		messageMarshaller.writeDouble(freeSpace);
+	}
+
+	public static ChunkUtil readAddressFromStream(MessageReader reader) throws IOException {
+		String host = reader.readString();
+		int port = reader.readInt();
+		return new ChunkUtil(host, port);
 	}
 
 	public static ChunkUtil readChunkFromStream(MessageReader reader) throws IOException {

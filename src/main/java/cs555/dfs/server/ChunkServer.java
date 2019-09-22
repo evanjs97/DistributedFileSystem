@@ -24,8 +24,8 @@ public class ChunkServer implements Server{
 	private int port;
 	private final ConcurrentHashMap<String, List<Integer>> corruptFiles = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, Integer> fileToSize = new ConcurrentHashMap<>();
-	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> files = new ConcurrentHashMap<>();
-	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> newFiles = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, HashSet<Integer>>> files = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, HashSet<Integer>>> newFiles = new ConcurrentHashMap<>();
 	private static final int CHECKSUM_SLICE = 8 * 1024;
 	private static final int CHECKSUM = 40;
 
@@ -95,7 +95,6 @@ public class ChunkServer implements Server{
 				handleFileReadRequest(request, socket);
 				break;
 			case CHUNK_READ_RESPONSE:
-				System.out.println("RECIEVED READ RESPONSE: " + socket.getInetAddress().getCanonicalHostName());
 				handleChunkReadResponse((ChunkReadResponse) event);
 				break;
 			case CHUNK_LOCATION_RESPONSE:
@@ -113,14 +112,22 @@ public class ChunkServer implements Server{
 	}
 
 	private void handleLocationResponse(ChunkLocationResponse response) {
-		List<Integer> corruptChunks = corruptFiles.getOrDefault(response.getFilename(), null);
+		ChunkUtil server = response.getLocations().get(0);
+		if(server == null) {
+			System.out.println("Failed to repair file, cannot locate safe server");
+			return;
+		}
+		String filename = response.getFilename()+response.getStartChunk();
+		List<Integer> corruptChunks = corruptFiles.getOrDefault(filename, null);
+
 		if (corruptChunks == null) {
 			System.out.println("Failed to repair file, cannot locate corrupt slices");
 			return;
 		}
 		try {
-			TCPSender sender = new TCPSender(new Socket(response.getHostname(), response.getPort()));
-			sender.sendData(new ChunkReadRequest(response.getFilename(), port, corruptChunks).getBytes());
+
+			TCPSender sender = new TCPSender(new Socket(server.getHostname(), server.getPort()));
+			sender.sendData(new ChunkReadRequest(filename, port, corruptChunks).getBytes());
 			sender.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
@@ -209,17 +216,21 @@ public class ChunkServer implements Server{
 			}
 			newFiles.putIfAbsent(actualFile, new ConcurrentHashMap<>());
 			files.putIfAbsent(actualFile, new ConcurrentHashMap<>());
-			newFiles.get(actualFile).putIfAbsent(chunkNum, new ConcurrentSkipListSet<>());
-			files.get(actualFile).putIfAbsent(chunkNum, new ConcurrentSkipListSet<>());
+			newFiles.get(actualFile).putIfAbsent(chunkNum, new HashSet<>());
+			files.get(actualFile).putIfAbsent(chunkNum, new HashSet<>());
 
-
+//			if(shardNum == -1) {
+//				System.out.println("Shard is -1: " + actualFile);
+//			}
 			if(shardNum != -1) {
-				ConcurrentSkipListSet<Integer> newShards = newFiles.get(actualFile).remove(chunkNum);
-				ConcurrentSkipListSet<Integer> oldShards = files.get(actualFile).remove(chunkNum);
-				newShards.add(shardNum);
-				oldShards.add(shardNum);
-				newFiles.get(actualFile).put(chunkNum, newShards);
-				files.get(actualFile).put(chunkNum, newShards);
+////				ConcurrentSkipListSet<Integer> newShards = newFiles.get(actualFile).remove(chunkNum);
+////				ConcurrentSkipListSet<Integer> oldShards = files.get(actualFile).remove(chunkNum);
+////				newShards.add(shardNum);
+////				oldShards.add(shardNum);
+////				newFiles.get(actualFile).put(chunkNum, newShards);
+////				files.get(actualFile).put(chunkNum, newShards);
+				newFiles.get(actualFile).get(chunkNum).add(shardNum);
+				files.get(actualFile).get(chunkNum).add(shardNum);
 			}
 
 			raFile.close();
@@ -317,7 +328,11 @@ public class ChunkServer implements Server{
 		try {
 			corruptFiles.put(filename, corruptChunks);
 			TCPSender sender = new TCPSender(new Socket(hostname, hostPort));
-			MessagingUtil.handleChunkLocationRequest(sender, filename, port);
+			System.out.println("TesT");
+			int chunk = Integer.parseInt(filename.substring(filename.lastIndexOf('_')+1));
+			String requestFile = filename.substring(0, filename.lastIndexOf('_')+1);
+			System.out.println("Requesting file: " + requestFile+ " for chunk: " + chunk);
+			MessagingUtil.handleChunkLocationRequest(sender, requestFile, port, chunk, chunk+1);
 			sender.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();

@@ -7,7 +7,7 @@ PORT="45467"
 CLIENT="little-rock"
 CHUNK_SERVERS_PER_MACHINE=1
 CHUNK_DIR="/tmp/evanjs"
-#FAULT_TOLERANCE="erasure"
+FAULT_TOLERANCE="erasure"
 
 gnome-terminal --geometry=132x43 -e "ssh -t ${SERVER} 'cd ${HOME}/build/classes/java/main; java cs555.dfs.server.ControllerServer ${PORT};bash;'"
 gnome-terminal --geometry=132x43 -e "ssh -t ${CLIENT} 'cd ${HOME}/build/classes/java/main; java cs555.dfs.server.ClientServer ${SERVER} ${PORT} ${FAULT_TOLERANCE};bash;'"

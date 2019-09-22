@@ -44,7 +44,7 @@ public class ChunkWriteRequest implements Event{
 		MessageMarshaller messageMarshaller = new MessageMarshaller();
 		messageMarshaller.writeInt(getType().getValue());
 		messageMarshaller.writeString(filename);
-		messageMarshaller.writeChunkUtilList(locations);
+		messageMarshaller.writeChunkUtilList(locations, false);
 
 		messageMarshaller.writeByteArr(chunkData);
 		messageMarshaller.writeInstant(lastModified);
@@ -86,7 +86,7 @@ public class ChunkWriteRequest implements Event{
 		try {
 			MessageReader messageReader = new MessageReader(din);
 			name = messageReader.readString();
-			messageReader.readChunkUtilList(locations);
+			messageReader.readChunkUtilList(locations, false);
 			chunk = messageReader.readByteArr();
 			time = messageReader.readInstant();
 			replication = messageReader.readBoolean();

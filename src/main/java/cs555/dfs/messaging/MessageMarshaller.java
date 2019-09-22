@@ -73,10 +73,11 @@ public class MessageMarshaller {
 		}
 	}
 
-	public void writeChunkUtilList(List<ChunkUtil> list) throws IOException {
+	public void writeChunkUtilList(List<ChunkUtil> list, boolean addressOnly) throws IOException {
 		writeInt(list.size());
 		for(ChunkUtil chunkUtil : list) {
-			chunkUtil.writeChunkToStream(this);
+			if(!addressOnly) chunkUtil.writeChunkToStream(this);
+			else chunkUtil.writeAddressToStream(this);
 		}
 	}
 
@@ -84,6 +85,13 @@ public class MessageMarshaller {
 		writeInt(list.size());
 		for(Integer i : list) {
 			writeInt(i);
+		}
+	}
+
+	public void writeStringList(List<String> list) throws IOException {
+		writeInt(list.size());
+		for(String str : list) {
+			writeString(str);
 		}
 	}
 

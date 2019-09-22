@@ -11,6 +11,7 @@ import cs555.dfs.util.ShardMetadata;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.Socket;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -20,13 +21,13 @@ import java.util.concurrent.ConcurrentSkipListSet;
 public class ChunkServerHeartbeatTask implements HeartbeatTask{
 	private final String destHost;
 	private final int destPort;
-	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> files;
+	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, HashSet<Integer>>> files;
 	private final ChunkServer server;
 	private final String BASE_DIR;
 	private boolean replication = true;
 
 	public ChunkServerHeartbeatTask(String destHost, int destPort, ChunkServer server,
-									ConcurrentHashMap<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> files, String baseDir) {
+									ConcurrentHashMap<String, ConcurrentHashMap<Integer, HashSet<Integer>>> files, String baseDir) {
 		this.destHost = destHost;
 		this.destPort = destPort;
 		this.files = files;
@@ -39,13 +40,13 @@ public class ChunkServerHeartbeatTask implements HeartbeatTask{
 
 	private List<FileMetadata> getFileMetadata() {
 		List<FileMetadata> metadata = new LinkedList<>();
-		for(Map.Entry<String, ConcurrentHashMap<Integer, ConcurrentSkipListSet<Integer>>> entry: files.entrySet()) {
+		for(Map.Entry<String, ConcurrentHashMap<Integer, HashSet<Integer>>> entry: files.entrySet()) {
 			System.out.println("Getting metadata for: " + entry.getKey());
 			if(entry.getKey().charAt(entry.getKey().length()-3) != 'k') {
 				replication = false;
 			}
 			FileMetadata fileMetadata = new FileMetadata(entry.getKey(), replication);
-			for(Map.Entry<Integer, ConcurrentSkipListSet<Integer>> pair : entry.getValue().entrySet()) {
+			for(Map.Entry<Integer, HashSet<Integer>> pair : entry.getValue().entrySet()) {
 				ChunkMetadata chunkMetadata;
 				if(pair.getValue().isEmpty()) {
 					 chunkMetadata = ChunkMetadata.getFileMetadata(BASE_DIR,

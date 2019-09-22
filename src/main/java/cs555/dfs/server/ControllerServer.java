@@ -15,13 +15,13 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class ControllerServer implements Server{
 
-	private final ConcurrentHashMap<String, ConcurrentSkipListSet<String>> fileToServers = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, HashSet<String>> fileToServers = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ChunkUtil> hostToServerObject = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, List<String>> hostToFiles = new ConcurrentHashMap<>();
-	private ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
+	private final ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
 	private final int port;
 
-	public ConcurrentHashMap<String, ConcurrentSkipListSet<String>> getFileToServers() {
+	public ConcurrentHashMap<String, HashSet<String>> getFileToServers() {
 		return fileToServers;
 	}
 
@@ -59,16 +59,13 @@ public class ControllerServer implements Server{
 	}
 
 	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
-//		SetIndexPair util = fileToServers.getOrDefault(request.getFilename(), null);
-		ConcurrentSkipListSet<String> servers = fileToServers.getOrDefault(request.getFilename(), null);
+		HashSet<String> servers = fileToServers.getOrDefault(request.getFilename(), null);
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 
 		if(servers != null) {
 			for(String server : servers) {
 				replicationServers.add(hostToServerObject.get(server));
 			}
-
-//			replicationServers.addAll(servers.);
 		}else {
 			synchronized (chunkServers) {
 				for (int i = 0; i < request.getNumLocations(); i++) {
@@ -93,6 +90,16 @@ public class ControllerServer implements Server{
 		}
 	}
 
+	private void getAllFiles() {
+		Enumeration<String> numeration = fileToServers.keys();
+		HashSet<String> files = new HashSet<>();
+		while(numeration.hasMoreElements()) {
+			String next = numeration.nextElement();
+			files.add(next.substring(0, next.lastIndexOf("_chunk_")));
+		}
+
+	}
+
 	private void registerChunkServer(RegisterRequest request) {
 		System.out.println("Controller: Received register request from " + request.getHostname() + ":" + request.getPort());
 		addChunkServer(request.getHostname(), request.getPort(), request.getFreeSpace());
@@ -107,7 +114,6 @@ public class ControllerServer implements Server{
 	}
 
 	private void handleChunkServerHeartbeat(ChunkServerHeartbeat heartbeat, Socket socket) {
-//		System.out.println("Heartbeat: " + socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort() + " Free Space: " + heartbeat.getFreeDiskSpace());
 		StringBuilder builder = new StringBuilder();
 		String hostFormat = Format.format(socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort(), 20);
 		String spaceFormat = Format.format(String.format("%.2f",heartbeat.getFreeDiskSpace()), 7);
@@ -143,11 +149,55 @@ public class ControllerServer implements Server{
 	}
 
 	private void addFile(String fullFile, ChunkUtil chunkUtil) {
-		fileToServers.putIfAbsent(fullFile, new ConcurrentSkipListSet<>());
+		fileToServers.putIfAbsent(fullFile, new HashSet<>());
 		fileToServers.get(fullFile).add(chunkUtil.toString());
 
 		hostToFiles.putIfAbsent(chunkUtil.toString(), new LinkedList<>());
 		hostToFiles.get(chunkUtil.toString()).add(fullFile);
+	}
+
+	private final void addServersByFilename(String filename, List<ChunkUtil> servers, int num, String host, int port) {
+		synchronized (fileToServers) {
+			HashSet<String> set = fileToServers.get(filename);
+			if (set == null) {
+				System.out.println("NO SERVERS for FILE: " + filename);
+				servers.add(new ChunkUtil("",0));
+				return;
+			}
+
+			int random = ThreadLocalRandom.current().nextInt(0, set.size());
+			int index = 0;
+			String last = null;
+			for (String server : set) {
+				if(index  == random) {
+					ChunkUtil util = hostToServerObject.get(server);
+					if(util.getHostname().equals(host) && util.getPort() == port) {
+//						System.out.println("Found dup");
+						if(set.size() <= 1) {
+							util = null;
+							servers.add(util);
+//							System.out.println("Returning null: " + set.size());
+							return;
+						}
+						else if(last != null) {
+							util = hostToServerObject.get(last);
+							servers.add(util);
+//							System.out.println("Returning last: " + util.toString());
+							return;
+						}
+						else {
+//							System.out.println("incrementing random");
+							random++;
+						}
+					}else {
+						servers.add(util);
+						return;
+					}
+				}
+				last = server;
+				index++;
+			}
+		}
 	}
 
 	/**
@@ -158,33 +208,29 @@ public class ControllerServer implements Server{
 	 * @param socket the socket the request was received over
 	 */
 	private void handleChunkLocationRequest(ChunkLocationRequest request, Socket socket) {
-		ArrayList<ChunkUtil> fileServers = new ArrayList<>();
-		for(String server : fileToServers.get(request.getFilename())) {
-			fileServers.add(hostToServerObject.get(server));
-		}
-		int random = ThreadLocalRandom.current().nextInt(0, fileServers.size());
-		ChunkUtil util = fileServers.get(random);
-		if(!socket.getInetAddress().getCanonicalHostName().equals("little-rock.cs.colostate.edu")) {
-			System.out.println("UTILNAME: " + util.getHostname() + ":" + util.getPort() + " SOCKENAME: " + socket.getInetAddress().getCanonicalHostName() + ":" + request.getPort());
-		}
-		if(util.getHostname().equals(socket.getInetAddress().getHostName()) && util.getPort() == request.getPort()) {
-			System.out.println("TestING");
-			if(fileServers.size() <= 1) util = null;
-			else if(random == 0) util = fileServers.get(random+1);
-			else util = fileServers.get(random-1);
+		List<ChunkUtil> fileServers = new ArrayList<>();
+
+
+		String base = request.getFilename();
+
+//		System.out.println("SHARdS: " + request.getNumShards());
+		for(int i = request.getStartChunk(); i < request.getEndChunk(); i++) {
+
+			if(request.getNumShards()> 0) {
+				for(int j = 0; j < request.getNumShards(); j++) {
+
+					addServersByFilename(base+i+"_"+j,fileServers,1, socket.getInetAddress().getCanonicalHostName(), request.getPort());
+				}
+			}else {
+				addServersByFilename(base+i,fileServers, 1, socket.getInetAddress().getCanonicalHostName(), request.getPort());
+			}
+
 		}
 
 		try {
 			TCPSender sender = new TCPSender(new Socket(socket.getInetAddress().getCanonicalHostName(), request.getPort()));
-			if(util != null) {
-				sender.sendData(new ChunkLocationResponse(util.getHostname(), util.getPort(), true, request.getFilename()).getBytes());
-				sender.close();
-
-			}else {
-				System.err.println("Controller: Unable to find the chunks location for" + request.getFilename());
-				sender.sendData(new ChunkLocationResponse("", 0, false, request.getFilename()).getBytes());
-				sender.close();
-			}
+			sender.sendData(new ChunkLocationResponse(true, request.getFilename(), request.getStartChunk(), request.getEndChunk(), request.getNumShards(), fileServers).getBytes());
+			sender.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
 		}

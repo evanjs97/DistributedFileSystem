@@ -36,12 +36,9 @@ public class ControllerHeartbeatTask implements HeartbeatTask{
 			}
 		}
 		for (Map.Entry<String,List<String>> failure : failedServers) {
-			List<String> hostSuccess = server.getHostToFiles().remove(failure.getKey());
-			if(hostSuccess == null) {
-				System.out.println("Failed to remove host from hostFiles");
-			}
-				boolean success = server.removeChunkUtil(failure.getKey());
-				System.out.println("Removed faulty server: " + failure.getKey() +  success);
+//			List<String> hostSuccess = server.getHostToFiles().remove(failure.getKey());
+			boolean success = server.removeChunkUtil(failure.getKey());
+//				System.out.println("Removed faulty server: " + failure.getKey() +  success);
 		}
 		for(Map.Entry<String,List<String>> failure : failedServers) {
 			handleFailedServer(failure.getValue());
@@ -60,6 +57,7 @@ public class ControllerHeartbeatTask implements HeartbeatTask{
 	}
 
 	private void handleFailedServer(List<String> failedFiles) {
+		System.out.println("Sending file replication requests to chunk servers");
 		for(String file : failedFiles) {
 
 			String destination = null;

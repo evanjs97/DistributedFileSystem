@@ -75,6 +75,12 @@ public class EventFactory {
 				case CHUNK_FORWARD_REQUEST:
 					e = new ChunkForwardRequest(din);
 					break;
+				case FILE_LIST_REQUEST:
+					e = new FileListRequest(din);
+					break;
+				case FILE_LIST_RESPONSE:
+					e = new FileListRequest(din);
+					break;
 				default:
 					System.err.println("Event of type " + type + " does not exist.");
 					break;
