@@ -129,7 +129,7 @@ public class ControllerServer implements Server{
 		chunkUtil.setFreeSpace(heartbeat.getFreeDiskSpace());
 		hostToServerObject.put(key, chunkUtil);
 		chunkServers.add(chunkUtil);
-
+//
 		for(FileMetadata metadata : heartbeat.getFileInfo()) {
 			for(ChunkMetadata chunkMetadata : metadata.getChunks()) {
 				String fullFile = metadata.getFilename() + "_chunk_"+chunkMetadata.getChunkNum();
@@ -141,7 +141,7 @@ public class ControllerServer implements Server{
 				}
 
 			}
-
+//
 			builder.append(metadata.toString());
 			builder.append('\n');
 		}

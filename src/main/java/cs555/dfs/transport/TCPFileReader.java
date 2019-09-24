@@ -70,7 +70,7 @@ public class TCPFileReader {
 			System.out.print("---");
 		}
 		if(count == this.numChunks) {
-			System.out.print(">\n");
+			System.out.print(">\nDownloaded " + count + " chunks");
 			setupDirectory();
 			readFile();
 		}
@@ -84,7 +84,7 @@ public class TCPFileReader {
 		shardsExist[chunkIndex][shard] = true;
 		numShards[chunkIndex]++;
 		shardSize[chunkIndex][shard] = fileSize;
-		if(numShards[chunkIndex] >= SolomonErasure.DATA_SHARDS) {
+		if(numShards[chunkIndex] > SolomonErasure.DATA_SHARDS) {
 			byte[] decoded = SolomonErasure.decode(shards[chunkIndex], shardsExist[chunkIndex], numShards[chunkIndex], shardSize[chunkIndex]);
 			numShards[chunkIndex] = -1;
 			addFileBytes(decoded, chunkIndex);

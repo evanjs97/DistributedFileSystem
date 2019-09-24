@@ -107,6 +107,7 @@ public class ChunkMetadata {
 	}
 
 	public static long getAvailableDiskSpace(String path) {
+
 		return new File(path).getFreeSpace();
 	}
 

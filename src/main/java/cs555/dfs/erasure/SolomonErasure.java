@@ -8,8 +8,10 @@ public class SolomonErasure {
 	public static final int DATA_SHARDS = 6;
 	public static final int PARITY_SHARDS = 3;
 	public static final int TOTAL_SHARDS = 9;
+//	public static int BYTES_INT_INT = 4;
 	public static final int BASE_CHUNK_SIZE = 1024 * 64;
-	public static final int SHARD_CHUNK_SIZE = BASE_CHUNK_SIZE + (BASE_CHUNK_SIZE % DATA_SHARDS);
+
+	public static final int SHARD_CHUNK_SIZE = BASE_CHUNK_SIZE + (DATA_SHARDS-BASE_CHUNK_SIZE % DATA_SHARDS);
 	public static final int SHARD_SIZE = SHARD_CHUNK_SIZE / DATA_SHARDS;
 
 	public static byte[][] encode(RandomAccessFile randomAccessFile, int size) throws IOException {
@@ -44,7 +46,6 @@ public class SolomonErasure {
 				totalSize = shardSize[i];
 			}
 		}
-
 		ReedSolomon reedSolomon = new ReedSolomon(DATA_SHARDS, PARITY_SHARDS);
 		reedSolomon.decodeMissing(shards, shardsExist, 0, SHARD_SIZE);
 
@@ -53,8 +54,9 @@ public class SolomonErasure {
 		for(int i = 0; i < DATA_SHARDS; i++) {
 			int curSize = SHARD_SIZE;
 			if(curSize > remaining) curSize = remaining;
-			System.arraycopy(shards[i], 0,bytes, curSize * i, curSize);
+			System.arraycopy(shards[i], 0,bytes, SHARD_SIZE * i, curSize);
 			remaining-=curSize;
+			if(remaining == 0) break;
 		}
 
 		return bytes;

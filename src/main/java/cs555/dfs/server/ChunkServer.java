@@ -7,6 +7,7 @@ import cs555.dfs.transport.TCPServer;
 import cs555.dfs.util.ChunkUtil;
 import cs555.dfs.util.ChunkMetadata;
 import cs555.dfs.util.Heartbeat;
+import org.omg.CORBA.INTERNAL;
 
 import java.io.*;
 import java.net.Socket;
@@ -19,13 +20,30 @@ import java.util.concurrent.ConcurrentSkipListSet;
 
 public class ChunkServer implements Server{
 
+	public class ChunkSlice {
+		int chunk;
+		int shard;
+		ChunkSlice(int chunk, int slice) {
+			this.chunk = chunk;
+			this.shard = slice;
+		}
+
+		public int getShard() {
+			return this.shard;
+		}
+
+		public int getChunk() {
+			return this.chunk;
+		}
+	}
+
 	private final String hostname;
 	private final int hostPort;
 	private int port;
 	private final ConcurrentHashMap<String, List<Integer>> corruptFiles = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, Integer> fileToSize = new ConcurrentHashMap<>();
-	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, HashSet<Integer>>> files = new ConcurrentHashMap<>();
-	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, HashSet<Integer>>> newFiles = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentHashMap.KeySetView<ChunkSlice, Boolean>> files = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentHashMap.KeySetView<ChunkSlice, Boolean>> newFiles = new ConcurrentHashMap<>();
 	private static final int CHECKSUM_SLICE = 8 * 1024;
 	private static final int CHECKSUM = 40;
 
@@ -214,24 +232,25 @@ public class ChunkServer implements Server{
 			}else {
 				chunkNum = Integer.parseInt(filename.substring(filename.lastIndexOf('_')+1));
 			}
-			newFiles.putIfAbsent(actualFile, new ConcurrentHashMap<>());
-			files.putIfAbsent(actualFile, new ConcurrentHashMap<>());
-			newFiles.get(actualFile).putIfAbsent(chunkNum, new HashSet<>());
-			files.get(actualFile).putIfAbsent(chunkNum, new HashSet<>());
+			newFiles.putIfAbsent(actualFile, ConcurrentHashMap.newKeySet());
+			files.putIfAbsent(actualFile, ConcurrentHashMap.newKeySet());
+//			newFiles.get(actualFile).putIfAbsent(chunkNum, new HashSet<>());
+//			files.get(actualFile).putIfAbsent(chunkNum, new HashSet<>());
 
 //			if(shardNum == -1) {
 //				System.out.println("Shard is -1: " + actualFile);
 //			}
-			if(shardNum != -1) {
 ////				ConcurrentSkipListSet<Integer> newShards = newFiles.get(actualFile).remove(chunkNum);
 ////				ConcurrentSkipListSet<Integer> oldShards = files.get(actualFile).remove(chunkNum);
 ////				newShards.add(shardNum);
 ////				oldShards.add(shardNum);
 ////				newFiles.get(actualFile).put(chunkNum, newShards);
 ////				files.get(actualFile).put(chunkNum, newShards);
-				newFiles.get(actualFile).get(chunkNum).add(shardNum);
-				files.get(actualFile).get(chunkNum).add(shardNum);
-			}
+//				System.out.println("ADDING FILE: " + actualFile);
+				ChunkSlice chunkSlice = new ChunkSlice(chunkNum, shardNum);
+				newFiles.get(actualFile).add(chunkSlice);
+
+				files.get(actualFile).add(chunkSlice);
 
 			raFile.close();
 			ChunkMetadata.incrementVersion(BASE_DIR+filename+".metadata");
@@ -444,6 +463,38 @@ public class ChunkServer implements Server{
 		return new FileRead(bytes, corruptChunks, length);
 	}
 
+	private void handleUserInput() {
+		Scanner scan = new Scanner(System.in);
+		while (true) {
+			while (scan.hasNextLine()) {
+				String[] input = scan.nextLine().split("\\s+");
+				switch (input[0]) {
+					case "find":
+						ConcurrentHashMap.KeySetView<ChunkSlice, Boolean> map = files.get(input[1]);
+						String s = "";
+						if(map != null) {
+							for(ChunkSlice entry : map) {
+								if(Integer.parseInt(input[2]) == entry.chunk) {
+									s = s+ "CHUNK: " + entry.shard + " SLICES: ";
+								}
+							}
+							System.out.println("FOUND: " + s);
+						}else {
+							System.out.println("FOUND: null");
+						}
+						break;
+					case "size":
+						System.out.println(files.get(input[1]).size());
+						break;
+
+				}
+
+			}
+
+		}
+
+	}
+
 	/**
 	 * Forwards a chunk to the next location from the list
 	 * @param request the chunk write request to use for forwarding.
@@ -470,6 +521,7 @@ public class ChunkServer implements Server{
 			String dataDir = args[2];
 			ChunkServer chunkServer = new ChunkServer(hostname, port, dataDir);
 			chunkServer.init();
+			chunkServer.handleUserInput();
 		}catch(NumberFormatException nfe) {
 			System.err.println("ChunkServer: Error invalid port, must be number in range 1024-65535");
 		}

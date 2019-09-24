@@ -15,9 +15,9 @@ import java.util.List;
 public class FileMetadata {
 	private final String filename;
 	private List<ChunkMetadata> chunks = new ArrayList<>();
-	private Instant lastModified = null;
+	private Instant lastModified = Instant.MIN;
 	private int version = 1;
-	private final boolean replication;
+	private boolean replication;
 
 	public String getFilename() {
 		return filename;
@@ -40,6 +40,14 @@ public class FileMetadata {
 	public FileMetadata(String filename, boolean replication) {
 		this.replication = replication;
 		this.filename = filename;
+	}
+
+	public FileMetadata(String filename) {
+		this.filename = filename;
+	}
+
+	public void setReplication(boolean replication) {
+		this.replication = replication;
 	}
 
 

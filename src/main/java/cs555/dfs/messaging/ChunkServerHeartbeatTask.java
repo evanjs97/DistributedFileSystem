@@ -3,31 +3,25 @@ package cs555.dfs.messaging;
 import cs555.dfs.erasure.SolomonErasure;
 import cs555.dfs.server.ChunkServer;
 import cs555.dfs.transport.TCPSender;
-import cs555.dfs.util.ChunkMetadata;
-import cs555.dfs.util.FileMetadata;
-import cs555.dfs.util.Format;
-import cs555.dfs.util.ShardMetadata;
+import cs555.dfs.util.*;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.Socket;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 public class ChunkServerHeartbeatTask implements HeartbeatTask{
 	private final String destHost;
 	private final int destPort;
-	private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, HashSet<Integer>>> files;
+	private final ConcurrentHashMap<String, ConcurrentHashMap.KeySetView<ChunkServer.ChunkSlice, Boolean>> files;
 	private final ChunkServer server;
 	private final String BASE_DIR;
 	private boolean replication = true;
 
 	public ChunkServerHeartbeatTask(String destHost, int destPort, ChunkServer server,
-									ConcurrentHashMap<String, ConcurrentHashMap<Integer, HashSet<Integer>>> files, String baseDir) {
+									ConcurrentHashMap<String, ConcurrentHashMap.KeySetView<ChunkServer.ChunkSlice, Boolean>> files, String baseDir) {
 		this.destHost = destHost;
 		this.destPort = destPort;
 		this.files = files;
@@ -40,28 +34,31 @@ public class ChunkServerHeartbeatTask implements HeartbeatTask{
 
 	private List<FileMetadata> getFileMetadata() {
 		List<FileMetadata> metadata = new LinkedList<>();
-		for(Map.Entry<String, ConcurrentHashMap<Integer, HashSet<Integer>>> entry: files.entrySet()) {
+		for(Map.Entry<String, ConcurrentHashMap.KeySetView<ChunkServer.ChunkSlice, Boolean>> entry: files.entrySet()) {
 			System.out.println("Getting metadata for: " + entry.getKey());
-			if(entry.getKey().charAt(entry.getKey().length()-3) != 'k') {
-				replication = false;
-			}
-			FileMetadata fileMetadata = new FileMetadata(entry.getKey(), replication);
-			for(Map.Entry<Integer, HashSet<Integer>> pair : entry.getValue().entrySet()) {
+			FileMetadata fileMetadata = new FileMetadata(entry.getKey(), false);
+			Iterator<ChunkServer.ChunkSlice> iter = entry.getValue().iterator();
+			while(iter.hasNext()) {
+				ChunkServer.ChunkSlice pair = iter.next();
 				ChunkMetadata chunkMetadata;
-				if(pair.getValue().isEmpty()) {
-					 chunkMetadata = ChunkMetadata.getFileMetadata(BASE_DIR,
-							entry.getKey() + "_chunk_" + pair.getKey(), pair.getKey());
-				}else {
-					chunkMetadata = new ChunkMetadata(pair.getKey());
-					for(Integer shard : pair.getValue()) {
-						chunkMetadata.addShard(ShardMetadata.getFileMetadata(BASE_DIR,
-								entry.getKey() + "_chunk_" + pair.getKey() + "_" + shard, shard));
-					}
+				if (pair.getShard() == -1) {
+					fileMetadata.setReplication(true);
+					chunkMetadata = ChunkMetadata.getFileMetadata(BASE_DIR,
+							entry.getKey() + "_chunk_" + pair.getChunk(), pair.getChunk());
+				} else {
+					chunkMetadata = new ChunkMetadata(pair.getChunk());
+					chunkMetadata.addShard(ShardMetadata.getFileMetadata(BASE_DIR,
+							entry.getKey() + "_chunk_" + pair.getChunk() + "_" + pair.getShard(), pair.getShard()));
 				}
+
 				fileMetadata.addChunk(chunkMetadata);
+				iter.remove();
 			}
+			System.out.println("SENDING: " + fileMetadata.getChunks().size() + " chunks");
 			metadata.add(fileMetadata);
+
 		}
+		System.out.println("SENDING: " + metadata.size() + " files");
 		return metadata;
 	}
 
@@ -75,7 +72,6 @@ public class ChunkServerHeartbeatTask implements HeartbeatTask{
 			ChunkServerHeartbeat request = new ChunkServerHeartbeat(metadata, server.getPort(), freeSpace, replication);
 			sender.sendData(request.getBytes());
 			sender.flush();
-			server.clearRecentFiles();
 //			sender.close();
 		}catch(IOException ioe) {
 			ioe.printStackTrace();
