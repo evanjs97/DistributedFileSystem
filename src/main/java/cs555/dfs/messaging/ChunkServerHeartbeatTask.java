@@ -35,9 +35,9 @@ public class ChunkServerHeartbeatTask implements HeartbeatTask{
 	private List<FileMetadata> getFileMetadata() {
 		List<FileMetadata> metadata = new LinkedList<>();
 		for(Map.Entry<String, ConcurrentHashMap.KeySetView<ChunkServer.ChunkSlice, Boolean>> entry: files.entrySet()) {
-			System.out.println("Getting metadata for: " + entry.getKey());
 			FileMetadata fileMetadata = new FileMetadata(entry.getKey(), false);
 			Iterator<ChunkServer.ChunkSlice> iter = entry.getValue().iterator();
+			if(!iter.hasNext())break;
 			while(iter.hasNext()) {
 				ChunkServer.ChunkSlice pair = iter.next();
 				ChunkMetadata chunkMetadata;
@@ -54,20 +54,19 @@ public class ChunkServerHeartbeatTask implements HeartbeatTask{
 				fileMetadata.addChunk(chunkMetadata);
 				iter.remove();
 			}
-			System.out.println("SENDING: " + fileMetadata.getChunks().size() + " chunks");
 			metadata.add(fileMetadata);
 
 		}
-		System.out.println("SENDING: " + metadata.size() + " files");
 		return metadata;
 	}
 
 	@Override
 	public void execute() {
 		try {
+			System.out.println("Sending Heartbeat");
 			TCPSender sender = new TCPSender(new Socket(destHost, destPort));
 			long space = ChunkMetadata.getAvailableDiskSpace(BASE_DIR);
-			double freeSpace = Format.formatBytes(space, 2, "GB");
+			double freeSpace = Format.formatBytes(space, 2, "MB");
 			List<FileMetadata> metadata = getFileMetadata();
 			ChunkServerHeartbeat request = new ChunkServerHeartbeat(metadata, server.getPort(), freeSpace, replication);
 			sender.sendData(request.getBytes());

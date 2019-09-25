@@ -15,13 +15,13 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class ControllerServer implements Server{
 
-	private final ConcurrentHashMap<String, HashSet<String>> fileToServers = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentHashMap.KeySetView<String, Boolean>> fileToServers = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, ChunkUtil> hostToServerObject = new ConcurrentHashMap<>();
-	private final ConcurrentHashMap<String, List<String>> hostToFiles = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, ConcurrentHashMap.KeySetView<String, Boolean>> hostToFiles = new ConcurrentHashMap<>();
 	private final ConcurrentSkipListSet<ChunkUtil> chunkServers = new ConcurrentSkipListSet<>();
 	private final int port;
 
-	public ConcurrentHashMap<String, HashSet<String>> getFileToServers() {
+	public ConcurrentHashMap<String, ConcurrentHashMap.KeySetView<String, Boolean>> getFileToServers() {
 		return fileToServers;
 	}
 
@@ -29,7 +29,7 @@ public class ControllerServer implements Server{
 		return hostToServerObject;
 	}
 
-	public ConcurrentHashMap<String, List<String>> getHostToFiles() {
+	public ConcurrentHashMap<String, ConcurrentHashMap.KeySetView<String, Boolean>> getHostToFiles() {
 		return hostToFiles;
 	}
 
@@ -59,7 +59,7 @@ public class ControllerServer implements Server{
 	}
 
 	private void sendAvailableServers(ChunkDestinationRequest request, Socket socket)  {
-		HashSet<String> servers = fileToServers.getOrDefault(request.getFilename(), null);
+		ConcurrentHashMap.KeySetView<String, Boolean> servers = fileToServers.getOrDefault(request.getFilename(), null);
 		LinkedList<ChunkUtil> replicationServers = new LinkedList<>();
 
 		if(servers != null) {
@@ -108,7 +108,6 @@ public class ControllerServer implements Server{
 	private void addChunkServer(String hostname, int port, double freeSpace) {
 		ChunkUtil chunkUtil = new ChunkUtil(hostname, port, freeSpace);
 
-
 		this.chunkServers.add(chunkUtil);
 		this.hostToServerObject.put(hostname + ":" + port, chunkUtil);
 	}
@@ -117,7 +116,7 @@ public class ControllerServer implements Server{
 		StringBuilder builder = new StringBuilder();
 		String hostFormat = Format.format(socket.getInetAddress().getCanonicalHostName()+":"+heartbeat.getPort(), 20);
 		String spaceFormat = Format.format(String.format("%.2f",heartbeat.getFreeDiskSpace()), 7);
-		builder.append(String.format("Host: %s, Free Space: %sGB\n",hostFormat, spaceFormat));
+		builder.append(String.format("Host: %s, Free Space: %sMB\n",hostFormat, spaceFormat));
 
 		String key = socket.getInetAddress().getCanonicalHostName() + ":" + heartbeat.getPort();
 		if(!hostToServerObject.containsKey(key)) {
@@ -149,16 +148,16 @@ public class ControllerServer implements Server{
 	}
 
 	private void addFile(String fullFile, ChunkUtil chunkUtil) {
-		fileToServers.putIfAbsent(fullFile, new HashSet<>());
+		fileToServers.putIfAbsent(fullFile,ConcurrentHashMap.newKeySet());
 		fileToServers.get(fullFile).add(chunkUtil.toString());
 
-		hostToFiles.putIfAbsent(chunkUtil.toString(), new LinkedList<>());
+		hostToFiles.putIfAbsent(chunkUtil.toString(), ConcurrentHashMap.newKeySet());
 		hostToFiles.get(chunkUtil.toString()).add(fullFile);
 	}
 
 	private final void addServersByFilename(String filename, List<ChunkUtil> servers, int num, String host, int port) {
 		synchronized (fileToServers) {
-			HashSet<String> set = fileToServers.get(filename);
+			ConcurrentHashMap.KeySetView<String, Boolean> set = fileToServers.get(filename);
 			if (set == null) {
 				System.out.println("NO SERVERS for FILE: " + filename);
 				servers.add(new ChunkUtil("",0));
@@ -172,21 +171,17 @@ public class ControllerServer implements Server{
 				if(index  == random) {
 					ChunkUtil util = hostToServerObject.get(server);
 					if(util.getHostname().equals(host) && util.getPort() == port) {
-//						System.out.println("Found dup");
 						if(set.size() <= 1) {
 							util = null;
 							servers.add(util);
-//							System.out.println("Returning null: " + set.size());
 							return;
 						}
 						else if(last != null) {
 							util = hostToServerObject.get(last);
 							servers.add(util);
-//							System.out.println("Returning last: " + util.toString());
 							return;
 						}
 						else {
-//							System.out.println("incrementing random");
 							random++;
 						}
 					}else {

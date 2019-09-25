@@ -15,7 +15,7 @@ import java.util.List;
 public class FileMetadata {
 	private final String filename;
 	private List<ChunkMetadata> chunks = new ArrayList<>();
-	private Instant lastModified = Instant.MIN;
+	private Instant lastModified = null;
 	private int version = 1;
 	private boolean replication;
 

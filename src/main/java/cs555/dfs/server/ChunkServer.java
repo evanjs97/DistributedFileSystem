@@ -11,6 +11,9 @@ import org.omg.CORBA.INTERNAL;
 
 import java.io.*;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.DigestException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -77,6 +80,13 @@ public class ChunkServer implements Server{
 		register(tcpServer.getInetAddress().getCanonicalHostName(), tcpServer.getLocalPort());
 		Thread server = new Thread(tcpServer);
 		server.start();
+
+		Path dir = Paths.get(BASE_DIR);
+		try {
+			Files.createDirectories(dir);
+		}catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
 
 		List<Heartbeat> heartbeatList = new LinkedList<>();
 		heartbeatList.add(new Heartbeat(30, new ChunkServerHeartbeatTask(hostname, hostPort, this, newFiles, BASE_DIR)));
@@ -162,7 +172,7 @@ public class ChunkServer implements Server{
 			sender.sendData(cwr.getBytes());
 			sender.close();
 		}catch(IOException ioe) {
-			System.out.println("Failed to send to: " + request.getDestHost() + ":"+request.getDestPort());
+//			System.out.println("Failed to send to: " + request.getDestHost() + ":"+request.getDestPort());
 		}
 	}
 

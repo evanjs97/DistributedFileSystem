@@ -6,6 +6,7 @@ import cs555.dfs.util.ChunkUtil;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -24,8 +25,8 @@ public class ControllerHeartbeatTask implements HeartbeatTask{
 	@Override
 	public void execute() {
 		System.out.println("Starting controller heartbeat");
-		List<Map.Entry<String,List<String>>> failedServers = new LinkedList<>();
-		for (Map.Entry<String, List<String>> entry : server.getHostToFiles().entrySet()) {
+		List<Map.Entry<String,ConcurrentHashMap.KeySetView<String, Boolean>>> failedServers = new LinkedList<>();
+		for (Map.Entry<String, ConcurrentHashMap.KeySetView<String, Boolean>> entry : server.getHostToFiles().entrySet()) {
 			try {
 				String[] destSplit = entry.getKey().split(":");
 				Socket socket = new Socket(destSplit[0], Integer.parseInt(destSplit[1]));
@@ -35,52 +36,65 @@ public class ControllerHeartbeatTask implements HeartbeatTask{
 				System.out.println("Found failed server: " + entry.getKey());
 			}
 		}
-		for (Map.Entry<String,List<String>> failure : failedServers) {
+		for (Map.Entry<String,ConcurrentHashMap.KeySetView<String, Boolean>> failure : failedServers) {
 //			List<String> hostSuccess = server.getHostToFiles().remove(failure.getKey());
-			boolean success = server.removeChunkUtil(failure.getKey());
-//				System.out.println("Removed faulty server: " + failure.getKey() +  success);
+			server.removeChunkUtil(failure.getKey());
+			server.getHostToFiles().remove(failure.getKey());
 		}
-		for(Map.Entry<String,List<String>> failure : failedServers) {
-			handleFailedServer(failure.getValue());
+		for(Map.Entry<String,ConcurrentHashMap.KeySetView<String, Boolean>> failure : failedServers) {
+			handleFailedServer(failure.getValue(), failedServers);
 		}
-		closeConnections();
+//		closeConnections();
 	}
 
-	public void closeConnections() {
-		for(TCPSender sender : senders.values()) {
-			try {
-				sender.close();
-			}catch(IOException ioe) {
-				ioe.printStackTrace();
-			}
-		}
-	}
+//	public void closeConnections() {
+//		for(TCPSender sender : senders.values()) {
+//			try {
+//				sender.close();
+//			}catch(IOException ioe) {
+//				//ioe.printStackTrace();
+//			}
+//		}
+//	}
 
-	private void handleFailedServer(List<String> failedFiles) {
+	private void handleFailedServer(ConcurrentHashMap.KeySetView<String, Boolean> failedFiles, List<Map.Entry<String,ConcurrentHashMap.KeySetView<String, Boolean>>> failures) {
 		System.out.println("Sending file replication requests to chunk servers");
 		for(String file : failedFiles) {
 
 			String destination = null;
+			//			for(String dest : server.getFileToServers().get(file))
+			for(Map.Entry<String,ConcurrentHashMap.KeySetView<String, Boolean>> fail : failures) {
+				server.getFileToServers().get(file).remove(fail.getKey());
+			}
+
+//			server.getFileToServers().get(file).
 			for(String dest : server.getFileToServers().get(file)) {
-				if(server.getHostToFiles().containsKey(dest)) {
+				if (server.getHostToFiles().containsKey(dest)) {
 					try {
 						String[] splitDest = dest.split(":");
+//						System.out.println("SOCKET: " + splitDest[0] + ":" + splitDest[1]);
 						senders.putIfAbsent(dest, new TCPSender(new Socket(splitDest[0], Integer.parseInt(splitDest[1]))));
 						destination = dest;
-					}catch(IOException ioe) {
+						break;
+					} catch (IOException ioe) {
 						ioe.printStackTrace();
 					}
 				}
 			}
+//			System.out.println("Forward Server: " + destination);
 			if(destination != null) {
-				ChunkUtil newLocation = findRandomDestination(file);
 				TCPSender sender = senders.get(destination);
-				try {
-					sender.sendData(new ChunkForwardRequest(file, newLocation.getHostname(), newLocation.getPort()).getBytes());
-					sender.flush();
-				}catch(IOException ioe) {
-					ioe.printStackTrace();
-				}
+				ChunkUtil newLocation = findRandomDestination(file);
+//				if(sender != null) {
+					try {
+//						System.out.println("SOCKET: " + newLocation.getHostname() + ":" " + senders.size() + " SERVERS: " + server.getChunkServers().size());
+						sender.sendData(new ChunkForwardRequest(file, newLocation.getHostname(), newLocation.getPort()).getBytes());
+						sender.flush();
+					} catch (IOException ioe) {
+						System.out.println("FAILED: " + destination + " Location: " + newLocation.getHostname() +":" + newLocation.getPort());
+						ioe.printStackTrace();
+					}
+//				}
 			}
 		}
 	}
