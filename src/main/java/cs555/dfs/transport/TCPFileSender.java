@@ -44,7 +44,7 @@ public class TCPFileSender {
 		this.destination = destination;
 		this.chunks = new LinkedList[numChunks];
 		chunkCount = new AtomicInteger(0);
-		this.PRINT_INTERVAL = numChunks / 10;
+		this.PRINT_INTERVAL = Math.max(1, numChunks / 10);
 		this.replication = replication;
 		System.out.println("Creating File Sender with Replication: " + replication);
 	}

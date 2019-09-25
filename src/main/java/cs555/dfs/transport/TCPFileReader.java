@@ -34,7 +34,7 @@ public class TCPFileReader {
 		this.chunkCount = new AtomicInteger(0);
 		if(destination.charAt(destination.length()-1) != '/') destination = destination + "/";
 		this.destination = destination;
-		this.PRINT_INTERVAL = (int) numChunks / 10;
+		this.PRINT_INTERVAL = Math.max(1, (int) numChunks / 10);
 		if(replication) {
 			shards = null;
 			numShards = null;
